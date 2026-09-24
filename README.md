@@ -31,13 +31,37 @@ normalización el clasificador aprende el encuadre en lugar de la conducta.
 bloques donde el modelo decidió con seguridad. Filtrar por ella deja menos
 etiquetas pero considerablemente más limpias.
 
-## Instalación
+## Instalación en una máquina nueva
+
+Requiere Python 3.9 o superior. **No requiere GPU** ni ninguna tarjeta
+especial: todo corre en procesador.
 
 ```bash
-pip install opencv-python numpy pandas scikit-learn joblib
+git clone https://github.com/ErickJester/fst-etiquetador.git
+cd fst-etiquetador
+pip install -r requirements.txt
+py comprobar.py
 ```
 
-No requiere GPU.
+`comprobar.py` tarda un minuto y verifica que esté todo: versión de Python,
+librerías, archivos del proyecto, que el modelo cargue con sus columnas, y que
+los videos que hayas dejado en `videos_sin_etiquetar/` se puedan leer completos.
+Si algo falta, dice exactamente qué comando lo arregla.
+
+Córrelo antes de procesar nada. Detecta en un minuto problemas que si no
+descubrirías a los diez minutos de estar procesando.
+
+En Linux o macOS usa `python3` en lugar de `py` en todos los comandos.
+
+### Sobre la versión de scikit-learn
+
+`modelo_fst.joblib` se guardó con scikit-learn 1.9.1. Cargarlo con otra serie
+funciona pero emite un aviso y puede cambiar las predicciones. `comprobar.py`
+lo detecta. La solución es reentrenar, que toma segundos:
+
+```bash
+py entrenar.py --carpeta etiquetas --etiquetas mano
+```
 
 ## Uso
 
@@ -95,6 +119,7 @@ videos, no al cambiar el código.
 
 | Archivo | Contenido |
 |---|---|
+| `comprobar.py` | Verifica que la máquina pueda correr todo. Se ejecuta primero |
 | `lib.py` | Registro de cámara, modelo de fondo, geometría automática, extracción de rasgos |
 | `etiquetar.py` | Video → CSV de rasgos y etiquetas |
 | `entrenar.py` | CSV etiquetados → modelo, con validación agrupada por video |

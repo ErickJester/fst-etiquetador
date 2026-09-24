@@ -32,6 +32,7 @@ El detalle está en `COMO_USARLO.md`.
 
 | Archivo | Qué es |
 |---|---|
+| `comprobar.py` | Diagnóstico del entorno. Lo primero que se corre en una máquina nueva |
 | `lib.py` | Registro, fondo, geometría automática, extracción, rasgos |
 | `etiquetar.py` | Video → CSV de rasgos (+ etiquetas si se da `--modelo`) |
 | `entrenar.py` | CSVs etiquetados → `modelo_fst.joblib` |
