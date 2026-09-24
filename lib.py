@@ -178,34 +178,89 @@ def fondo_y_ocupacion(ruta, lut, WH, fps, log=print):
 def detectar_geometria(fondo, occ, n_tubos=None, log=print):
     """Devuelve dict con tubos, y_agua, y_fondo, roi_arriba, roi_abajo.
 
-    Tubos: rachas de columnas donde el animal aparece. Las paredes separan
-    los blobs, asi que los huecos entre rachas son las paredes.
+    El orden importa y no es el obvio:
 
-    Agua y fondo: bordes horizontales del aparato VACIO. Los dos bordes mas
-    fuertes son los rebordes del recipiente y acotan el aparato; dentro de
-    ellos, el borde mas marcado arriba es la linea de agua y el de abajo el
-    suelo del tubo."""
+    1. Las FILAS se sacan primero, del fotograma completo del aparato vacio.
+       Los dos bordes horizontales mas fuertes son los rebordes del recipiente.
+    2. Las COLUMNAS se sacan despues, midiendo la ocupacion SOLO dentro de la
+       franja de agua. Fuera de ella mandan el estante, la puerta y la gente
+       que pasa: en un video de prueba el borde del encuadre tenia el triple de
+       movimiento que las propias ratas y se tragaba todos los tubos en uno.
+    3. Se tiran las rachas pegadas al borde del encuadre. Un aparato nunca esta
+       al filo de la pantalla; lo que aparece ahi es el laboratorio.
+    4. Las filas se recalculan con las bandas estrechas ya conocidas, que dan
+       el suelo mas fino que el fotograma entero.
+
+    Un cilindro vacio no produce racha, asi que se numeran los tubos CON
+    animal, de izquierda a derecha."""
     H, W = occ.shape
 
-    # --- columnas -> tubos ---
-    cp = np.convolve(occ.sum(0), np.ones(15) / 15, mode='same')
+    def bordes_horizontales(cols=None):
+        b = fondo if cols is None else np.concatenate(
+            [fondo[:, a:b_] for a, b_ in cols], axis=1)
+        b = cv2.GaussianBlur(b.astype(np.float32), (0, 0), 3)
+        return np.convolve(np.abs(cv2.Sobel(b, cv2.CV_32F, 0, 1, ksize=5)).mean(1),
+                           np.ones(5) / 5, mode='same')
+
+    def rebordes(gy):
+        def picos(y0, y1, sep=25, n=1):
+            y0, y1 = max(0, y0), min(H, y1)
+            orden = np.argsort(gy[y0:y1])[::-1] + y0
+            sel = []
+            for p in orden:
+                if all(abs(p - q) > sep for q in sel):
+                    sel.append(int(p))
+                if len(sel) == n:
+                    break
+            return sel
+        f = sorted(picos(int(0.2 * H), int(0.95 * H), sep=int(0.15 * H), n=2))
+        if len(f) < 2:
+            raise RuntimeError('no se encontraron los bordes del aparato')
+        ar, ab = f
+        alto = ab - ar
+        ya = picos(ar + int(0.10 * alto), ar + int(0.55 * alto), n=1)[0]
+        yf = picos(ar + int(0.70 * alto), ab - int(0.10 * alto), n=1)[0]
+        if yf - ya < 0.25 * alto:
+            ya, yf = ar + int(0.22 * alto), ar + int(0.84 * alto)
+            log('    AVISO: bordes internos poco claros, se usaron proporciones tipicas')
+        return ya, yf
+
+    # --- 1. filas aproximadas, del fotograma entero ---
+    ya0, yf0 = rebordes(bordes_horizontales())
+
+    # --- 2. columnas, midiendo solo dentro de la franja de agua ---
+    cp = np.convolve(occ[ya0:yf0, :].sum(0), np.ones(15) / 15, mode='same')
     on = cp > 0.12 * cp.max()
-    rachas, i = [], 0
-    while i < len(on):
+    crudas, i = [], 0
+    while i < W:
         if on[i]:
             j = i
-            while j + 1 < len(on) and on[j + 1]:
+            while j + 1 < W and on[j + 1]:
                 j += 1
             if j - i > 0.03 * W:
-                rachas.append((i, j))
+                crudas.append((i, j))
             i = j + 1
         else:
             i += 1
-    if n_tubos:
-        rachas = sorted(rachas, key=lambda r: r[1] - r[0], reverse=True)[:n_tubos]
+
+    # --- 3. fuera lo que toca el borde del encuadre ---
+    margen = max(3, int(0.01 * W))
+    rachas = [(a, b) for a, b in crudas if a > margen and b < W - 1 - margen]
+    if len(rachas) < len(crudas):
+        log('    descartadas %d zonas pegadas al borde del encuadre '
+            '(estanteria, puerta, gente)' % (len(crudas) - len(rachas)))
+    if n_tubos and len(rachas) > n_tubos:
+        # se queda con las de mas actividad, no con las mas anchas: una racha
+        # ancha puede ser una sombra que se arrastra.
+        rachas = sorted(rachas, key=lambda r: cp[r[0]:r[1]].sum(),
+                        reverse=True)[:n_tubos]
         rachas.sort()
     if not rachas:
         raise RuntimeError('no se distinguio ningun tubo; revisa el video')
+    if n_tubos and len(rachas) != n_tubos:
+        log('    AVISO: se pidieron %d tubos y se hallaron %d. Puede que algun '
+            'cilindro este vacio o que el animal no se distinga del fondo.'
+            % (n_tubos, len(rachas)))
 
     # Ensanchar cada racha hasta la mitad del hueco con el vecino: ahi esta la
     # pared. Los dos tubos de los extremos no tienen vecino por fuera, asi que
@@ -226,40 +281,11 @@ def detectar_geometria(fondo, occ, n_tubos=None, log=print):
             d = min(W - 1, i + tipico)
         tubos[k] = (int(i), int(d))
 
-    # --- filas -> agua y fondo ---
-    # Se usan las rachas ESTRECHAS (donde de verdad aparece el animal), no los
-    # tubos ensanchados hasta la pared. Las paredes meten bordes propios que
-    # tapan el del suelo: con paredes el suelo salio 45 px desviado, sin ellas 16.
-    banda = np.concatenate([fondo[:, a:b] for a, b in rachas],
-                           axis=1).astype(np.float32)
-    banda = cv2.GaussianBlur(banda, (0, 0), 3)
-    gy = np.abs(cv2.Sobel(banda, cv2.CV_32F, 0, 1, ksize=5)).mean(1)
-    gy = np.convolve(gy, np.ones(5) / 5, mode='same')
-
-    def picos(y0, y1, sep=25, n=1):
-        y0, y1 = max(0, y0), min(H, y1)
-        orden = np.argsort(gy[y0:y1])[::-1] + y0
-        sel = []
-        for p in orden:
-            if all(abs(p - q) > sep for q in sel):
-                sel.append(int(p))
-            if len(sel) == n:
-                break
-        return sel
-
-    fuertes = sorted(picos(int(0.2 * H), int(0.95 * H), sep=int(0.15 * H), n=2))
-    if len(fuertes) < 2:
-        raise RuntimeError('no se encontraron los bordes del aparato')
-    arriba, abajo = fuertes
-    alto = abajo - arriba
-    # El borde de abajo del recipiente es enorme y su falda contamina la
-    # busqueda del suelo, asi que se corta la ventana bien antes de llegar a el.
-    y_agua  = picos(arriba + int(0.10 * alto), arriba + int(0.55 * alto), n=1)[0]
-    y_fondo = picos(arriba + int(0.70 * alto), abajo - int(0.10 * alto), n=1)[0]
-    if y_fondo - y_agua < 0.25 * alto:
-        y_agua  = arriba + int(0.22 * alto)
-        y_fondo = arriba + int(0.84 * alto)
-        log('    AVISO: bordes internos poco claros, se usaron proporciones tipicas')
+    # --- 4. filas otra vez, ya con las bandas estrechas de cada tubo ---
+    # Afinan el suelo: el fotograma entero lo dejaba 45 px desviado y estas
+    # bandas lo dejan en 16. Se usan las rachas SIN ensanchar, porque las
+    # paredes meten bordes propios que tapan el del suelo.
+    y_agua, y_fondo = rebordes(bordes_horizontales(rachas))
 
     col = y_fondo - y_agua
     g = dict(tubos=tubos, y_agua=int(y_agua), y_fondo=int(y_fondo),
