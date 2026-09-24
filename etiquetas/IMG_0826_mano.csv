@@ -1,0 +1,241 @@
+﻿espécimen,bloque,tiempo_inicio,tiempo_fin,clase,confianza,justificación
+1,1,0:00,0:05,nado,media,"Cuerpo horizontal girando en superficie; gran traslación lateral (rng 233 px, la mayor del ensayo); primer fotograma ocluido por el brazo del experimentador"
+2,1,0:00,0:05,escalamiento,media,Tras 2.2 s adopta postura vertical sostenida con hocico muy por encima del agua y patas delanteras rompiendo la superficie
+3,1,0:00,0:05,nado,baja,Alterna mitad y mitad entre desplazamiento diagonal y postura vertical; empate real entre nado y escalamiento
+4,1,0:00,0:05,escalamiento,media,"Vertical con cabeza alta desde 2.2 s, patas delanteras en superficie y salpicaduras; actividad máxima (me 29.4)"
+1,2,0:05,0:10,escalamiento,baja,"Cuatro de ocho muestras en vertical con cabeza 102 px sobre el agua y salpicadura, pero alterna con nado horizontal al inicio y al final"
+2,2,0:05,0:10,escalamiento,media,"Postura vertical mantenida, hocico alto y patas delanteras al nivel de la superficie; sin traslación neta (rng 80)"
+3,2,0:05,0:10,nado,media,Se desplaza cruzando el eje central del cilindro (rng 151) con cuerpo diagonal y remo visible de las cuatro extremidades
+4,2,0:05,0:10,escalamiento,media,Vertical pegado a la pared con cabeza fuera del agua y patas delanteras activas en superficie; poca traslación (rng 79)
+1,3,0:10,0:15,nado,media,Recorre el cilindro de izquierda a derecha con cuerpo diagonal y horizontal (rng 179); una salpicadura alta a los 10.9 s no se sostiene
+2,3,0:10,0:15,nado,media,Cuerpo inclinado con remo de patas traseras; se desplaza cruzando el eje central; hocico apenas 58 px sobre el agua
+3,3,0:10,0:15,escalamiento,media,Vertical en las ocho muestras con hocico alto y patas delanteras a la altura de la superficie; verticalidad 0.91 y actividad alta
+4,3,0:10,0:15,nado,media,"Cuerpo diagonal la mayor parte del bloque, avanza hacia la derecha y vuelve; solo la última muestra es vertical"
+1,4,0:15,0:20,escalamiento,media,"Desde 15.9 s se mantiene vertical con hocico 96 px sobre el agua y patas delanteras rompiendo la superficie, con salpicadura"
+2,4,0:15,0:20,nado,media,"Postura vertical pero con traslación lateral clara (rng 146, dos cuadrantes); hocico bajo, sin brazadas aéreas sostenidas"
+3,4,0:15,0:20,escalamiento,media,"Vertical y pegado a la pared en siete de ocho muestras, hocico 90 px sobre el agua; actividad alta (me 24.9)"
+4,4,0:15,0:20,nado,baja,Alterna cuerpo horizontal (15.9-16.6 s) con vertical; desplazamiento moderado; reparto casi equitativo entre nado y escalamiento
+1,5,0:20,0:25,nado,media,Gran recorrido lateral (rng 158) con cuerpo horizontal y patas delanteras extendidas hacia adelante a los 21.6 s
+2,5,0:20,0:25,escalamiento,baja,"Vertical fijo en un solo cuadrante con hocico sobre el agua y patas delanteras a la altura de la superficie; actividad aun alta, pero sin brazadas claras contra la pared"
+3,5,0:20,0:25,escalamiento,baja,"Postura vertical sostenida y hocico 85 px sobre el agua sin desplazamiento (un cuadrante); límite con inmovilidad, se resuelve por la actividad alta (me 21.4)"
+4,5,0:20,0:25,nado,media,"Cuerpo horizontal o diagonal en seis de ocho muestras, avanza y retrocede cruzando el eje; hocico bajo (38 px)"
+1,6,0:25,0:30,nado,alta,"Recorre el cilindro en horizontal con remo visible (26.6-28.4 s), máxima traslación del bloque (rng 162)"
+2,6,0:25,0:30,escalamiento,media,"Vertical en las ocho muestras, hocico 82 px sobre el agua y patas delanteras rompiendo la superficie a los 26.6 s"
+3,6,0:25,0:30,escalamiento,media,Vertical pegado a la pared todo el bloque (verticalidad 0.93) con hocico alto y salpicadura
+4,6,0:25,0:30,nado,media,Se desplaza de izquierda a derecha con cuerpo diagonal y horizontal; solo las dos últimas muestras son verticales
+1,7,0:30,0:35,escalamiento,media,Vertical en las ocho muestras con hocico 71 px sobre el agua; pata delantera elevada junto a la superficie a los 32.2 s
+2,7,0:30,0:35,nado,media,"Cuerpo diagonal y luego horizontal, avanza hacia la derecha; hocico bajo y verticalidad mínima del bloque (0.74)"
+3,7,0:30,0:35,escalamiento,baja,Vertical sin desplazamiento (un cuadrante) pero con hocico alto y recolocación continua de patas traseras; límite con inmovilidad
+4,7,0:30,0:35,nado,baja,"Postura diagonal constante con movimiento de extremidades y sin cruce de cuadrantes; nado de baja amplitud, ambiguo con inmovilidad"
+1,8,0:35,0:40,escalamiento,media,Vertical con hocico 78 px sobre el agua; patas delanteras junto a la superficie a los 36.6 y 37.2 s
+2,8,0:35,0:40,nado,media,Cuerpo claramente horizontal (verticalidad 0.68) desplazandose por la mitad superior del cilindro
+3,8,0:35,0:40,escalamiento,media,Vertical rigido con hocico 83 px fuera del agua y cola colgando; patas traseras cambian de posición entre muestras
+4,8,0:35,0:40,nado,baja,Diagonal estable con hocico apenas sobre la superficie; actividad todavia alta pero sin cruzar cuadrantes
+1,9,0:40,0:45,escalamiento,media,"Vertical con hocico elevado en siete de ocho muestras, desplazandose a lo largo de la pared"
+2,9,0:40,0:45,nado,media,Se desplaza cruzando el eje central con el hocico casi a ras del agua (44 px); postura sumergida
+3,9,0:40,0:45,escalamiento,baja,"Prácticamente fijo (rng 33, el menor hasta aqui) pero vertical con hocico 77 px fuera; límite con inmovilidad"
+4,9,0:40,0:45,escalamiento,baja,"Vertical con hocico elevado en la mayoria de muestras; las dos últimas viran a horizontal, lo que resta claridad"
+1,10,0:45,0:50,escalamiento,media,Vertical todo el bloque con hocico 97 px sobre el agua y pata delantera junto a la superficie a los 47.8 y 48.5 s
+2,10,0:45,0:50,nado,baja,Vertical pero con el hocico casi a ras (49 px) y poca traslación; braceo continuo sin alcanzar la pared en alto
+3,10,0:45,0:50,nado,media,Se estira en horizontal entre 47.2 y 48.5 s recorriendo el ancho del cilindro (rng 130)
+4,10,0:45,0:50,nado,baja,Diagonal con hocico bajo y desplazamiento moderado; alterna con postura vertical breve
+1,11,0:50,0:55,nado,media,Gran recorrido (rng 157) alternando horizontal y diagonal; solo dos muestras verticales
+2,11,0:50,0:55,nado,media,Cuerpo vertical sumergido con hocico a ras del agua (32 px) desplazandose de lado a lado
+3,11,0:50,0:55,nado,baja,"Pasa de vertical a horizontal en la segunda mitad; actividad intermedia, transición a mitad de bloque"
+4,11,0:50,0:55,nado,baja,"Cambia de horizontal a vertical y vuelve, sin cruzar cuadrantes; hocico bajo, amplitud pequena"
+1,12,0:55,1:00,nado,media,Traslacion amplia (rng 147) con cuerpo horizontal al inicio y al final; un pico vertical a los 56.5 s
+2,12,0:55,1:00,nado,baja,Vertical con hocico moderadamente elevado y desplazamiento corto; braceo constante
+3,12,0:55,1:00,nado,baja,Primera mitad vertical y segunda horizontal; transición clara a mitad de bloque
+4,12,0:55,1:00,nado,media,Se desplaza cruzando el eje con hocico a ras (32 px); últimas muestras claramente horizontales
+1,13,1:00,1:05,nado,baja,"Alterna vertical y diagonal con desplazamiento moderado; hocico a media altura, sin brazadas aéreas"
+2,13,1:00,1:05,escalamiento,baja,Vertical con hocico 75 px fuera del agua en cuatro muestras centrales; desplazamiento corto a lo largo de la pared
+3,13,1:00,1:05,nado,baja,Vertical-diagonal con patas delanteras bajo el mentón; actividad media sin elevación marcada
+4,13,1:00,1:05,inmovilidad,baja,"Flotación diagonal con silueta casi idéntica en las ocho muestras, hocico a ras (33 px) y un solo cuadrante; primer episodio de inmovilidad del ensayo"
+1,14,1:05,1:10,nado,media,Cuerpo estirado en horizontal entre 66.6 y 68.4 s recorriendo el cilindro (rng 132)
+2,14,1:05,1:10,inmovilidad,baja,Postura vertical estable con hocico fuera y cuerpo sumergido sin cambios entre muestras; rng 37 y un solo cuadrante
+3,14,1:05,1:10,escalamiento,baja,Vertical con recolocación visible de patas traseras entre muestras y patas delanteras elevadas a los 68.4-69.1 s
+4,14,1:05,1:10,nado,media,Se desplaza de izquierda a derecha con hocico a ras del agua (33 px) y cuerpo diagonal
+1,15,1:10,1:15,nado,media,Traslacion amplia (rng 137) con giro del cuerpo en la segunda mitad del bloque
+2,15,1:10,1:15,inmovilidad,baja,"Ocho muestras prácticamente superponibles, vertical con solo el hocico fuera; actividad baja (me 17.2)"
+3,15,1:10,1:15,nado,baja,Pasa de vertical a diagonal-horizontal desde 72.8 s con desplazamiento; transición a mitad de bloque
+4,15,1:10,1:15,nado,baja,Oscila de izquierda a derecha con cuerpo vertical y algun tramo horizontal; amplitud moderada
+1,16,1:15,1:20,inmovilidad,baja,Se mantiene en un solo cuadrante con la silueta estable y solo la cola oscilando; actividad por debajo de la media (me 17.8)
+2,16,1:15,1:20,nado,media,Gira sobre sí mismo y se sumerge hacia 78.4 s con salpicadura visible; desplazamiento claro
+3,16,1:15,1:20,nado,media,Cuerpo estirado en horizontal entre 77.2 y 78.4 s cruzando el ancho del cilindro (rng 131)
+4,16,1:15,1:20,nado,alta,Buceo con cuerpo completamente horizontal y salpicadura a los 77.2 s; se cuenta como nado según la regla
+1,17,1:20,1:25,nado,alta,Horizontal durante todo el bloque recorriendo el cilindro (rng 149); salpicadura final a los 84.7 s
+2,17,1:20,1:25,nado,media,Rota el cuerpo de vertical a diagonal desplazandose; hocico a media altura
+3,17,1:20,1:25,nado,media,Pasa de vertical a diagonal desde 82.2 s y avanza hacia la derecha
+4,17,1:20,1:25,nado,media,Diagonal y horizontal con desplazamiento amplio (rng 138) y hocico bajo
+1,18,1:25,1:30,nado,media,"Vertical pero trasladandose por el cilindro (rng 134, dos cuadrantes); últimas muestras diagonales"
+2,18,1:25,1:30,nado,baja,Rota de vertical a horizontal a lo largo del bloque sin desplazarse mucho; transición continua
+3,18,1:25,1:30,nado,baja,Una elevación alta del hocico a los 85.9 s seguida de nado diagonal; predominio repartido
+4,18,1:25,1:30,nado,baja,Vertical-diagonal con traslación moderada y elevación del hocico al final
+1,19,1:30,1:35,nado,alta,Cuerpo horizontal estirado en las ocho muestras recorriendo el cilindro; máxima traslación del bloque (rng 167)
+2,19,1:30,1:35,escalamiento,baja,Vertical en un solo cuadrante con el hocico cada vez más alto en la segunda mitad (74 px)
+3,19,1:30,1:35,nado,baja,Vertical-diagonal con desplazamiento claro (rng 120) y hocico a media altura
+4,19,1:30,1:35,inmovilidad,baja,"Silueta casi constante en las ocho muestras, solo la cola se mueve; un cuadrante y actividad baja"
+1,20,1:35,1:40,nado,media,Cuerpo diagonal y horizontal recorriendo el cilindro (rng 141) con remo de patas traseras
+2,20,1:35,1:40,inmovilidad,baja,Vertical con hocico a ras y silueta estable; actividad de las más bajas hasta aqui (me 16.6)
+3,20,1:35,1:40,escalamiento,baja,Vertical fijo en un cuadrante con hocico 85 px sobre el agua y recolocación de patas traseras
+4,20,1:35,1:40,inmovilidad,media,"Ocho muestras superponibles, hocico apenas 42 px sobre el agua y desplazamiento mínimo (rng 29)"
+1,21,1:40,1:45,nado,baja,Vertical con deriva sostenida hacia la derecha a lo largo del bloque; movimiento de cola continuo
+2,21,1:40,1:45,nado,baja,Vertical desplazandose de izquierda a derecha (rng 117) con hocico a media altura
+3,21,1:40,1:45,escalamiento,baja,"Vertical con hocico 89 px fuera del agua en las ocho muestras, avanzando pegado a la pared"
+4,21,1:40,1:45,inmovilidad,baja,Diagonal con hocico prácticamente a ras (23 px) y silueta constante; solo movimientos de sosten
+1,22,1:45,1:50,nado,media,Diagonal-horizontal con remo visible de patas traseras y desplazamiento amplio (rng 124)
+2,22,1:45,1:50,nado,baja,"Rota de vertical a horizontal y vuelve, sin cruzar cuadrantes; postura cambiante"
+3,22,1:45,1:50,escalamiento,baja,Vertical con hocico elevado todo el bloque avanzando junto a la pared
+4,22,1:45,1:50,inmovilidad,baja,Flotación diagonal con hocico a ras (26 px) y silueta casi sin cambios entre muestras
+1,23,1:50,1:55,nado,media,Cuerpo horizontal a los 112.8 s con recorrido amplio por la mitad superior (rng 130)
+2,23,1:50,1:55,nado,baja,Alterna vertical y diagonal con giro del cuerpo; desplazamiento moderado
+3,23,1:50,1:55,escalamiento,baja,Vertical casi fijo con hocico 78 px sobre el agua y patas traseras recolocándose
+4,23,1:50,1:55,inmovilidad,media,"Hocico justo al nivel del agua (18 px, el más bajo del ensayo hasta aqui) y postura inalterada"
+1,24,1:55,2:00,inmovilidad,baja,Flotación diagonal con silueta repetida en siete de ocho muestras; solo deriva al final del bloque
+2,24,1:55,2:00,nado,media,Gira el cuerpo y baja la cabeza entre 117.2 y 119.1 s desplazandose por el cilindro
+3,24,1:55,2:00,inmovilidad,baja,Diagonal estable con hocico fuera del agua y sin braceo; solo la cola cambia de forma
+4,24,1:55,2:00,nado,baja,Rota el cuerpo con patas delanteras extendidas a los 117.8-118.4 s y se desplaza
+1,25,2:00,2:05,nado,media,Horizontal-diagonal recorriendo la mitad superior con patas delanteras visibles a los 122.8 s
+2,25,2:00,2:05,nado,baja,Vertical con hocico bajo pero con pata delantera extendida a los 122.8 y 123.4 s; actividad intermedia
+3,25,2:00,2:05,nado,baja,Vertical que rota a diagonal con deriva lateral; predominio poco marcado
+4,25,2:00,2:05,inmovilidad,baja,Vertical con hocico a ras (28 px) y postura mantenida; movimientos minimos de sosten
+1,26,2:05,2:10,nado,media,Diagonal-horizontal con el mayor recorrido del bloque (rng 148)
+2,26,2:05,2:10,inmovilidad,media,"Silueta constante y actividad muy baja (me 15.0), un solo cuadrante, hocico a media altura"
+3,26,2:05,2:10,nado,baja,Vertical-diagonal con rotación y patas delanteras visibles a los 126.6 s; desplazamiento moderado
+4,26,2:05,2:10,inmovilidad,media,Diagonal inmovil con hocico fuera del agua; rng 52 y actividad baja (me 17.4)
+1,27,2:10,2:15,inmovilidad,baja,Deriva pasiva hacia la derecha con la misma silueta diagonal y extremidades quietas; me 15.7
+2,27,2:10,2:15,inmovilidad,media,Vertical con postura invariable y la actividad más baja del bloque (me 14.4)
+3,27,2:10,2:15,inmovilidad,baja,Vertical fijo en un cuadrante; las patas traseras se recolocan pero no hay avance ni brazada aérea
+4,27,2:10,2:15,inmovilidad,alta,Prácticamente sin movimiento (rng 25) con el hocico al nivel del agua durante los 5 s completos
+1,28,2:15,2:20,inmovilidad,baja,Vertical estable en las primeras cinco muestras con deriva y ligera rotación al final; actividad baja (me 16.7)
+2,28,2:15,2:20,nado,baja,Deriva hacia la derecha y rota el cuerpo bajando la cabeza entre 138.5 y 139.7 s
+3,28,2:15,2:20,inmovilidad,media,"Ocho muestras superponibles, vertical con patas traseras colgando; rng 43 y me 15.9"
+4,28,2:15,2:20,inmovilidad,baja,Diagonal con hocico a ras (29 px) y silueta mantenida; solo deriva lenta
+1,29,2:20,2:25,inmovilidad,baja,Vertical-diagonal con postura sostenida y deriva corta; actividad baja (me 15.9)
+2,29,2:20,2:25,inmovilidad,baja,Vertical con hocico apenas fuera del agua y silueta repetida; sin braceo dirigido
+3,29,2:20,2:25,inmovilidad,baja,Vertical fijo en un cuadrante; las patas traseras se recolocan pero no hay avance
+4,29,2:20,2:25,inmovilidad,media,Hocico al nivel del agua (18 px) con postura vertical inalterada durante el bloque
+1,30,2:25,2:30,inmovilidad,alta,"Silueta idéntica en las ocho muestras, hocico a ras y cola colgando; mínima actividad del ensayo (me 14.7)"
+2,30,2:25,2:30,inmovilidad,alta,"Flotación vertical sin cambios, pata delantera recogida bajo el mentón; me 13.8"
+3,30,2:25,2:30,inmovilidad,baja,Vertical con hocico fuera del agua y postura constante; solo se mueven cola y patas traseras
+4,30,2:25,2:30,nado,media,Salpicadura y cuerpo horizontal a los 147.2 s seguido de rotación; claramente activo
+1,31,2:30,2:35,inmovilidad,baja,Deriva lateral con postura vertical constante y extremidades quietas; me 16.0
+2,31,2:30,2:35,inmovilidad,media,Ocho muestras prácticamente idénticas; rng 37 y actividad baja
+3,31,2:30,2:35,nado,baja,Pasa de diagonal a vertical con patas delanteras visibles al final; desplazamiento moderado
+4,31,2:30,2:35,inmovilidad,baja,Diagonal con hocico fuera y silueta mantenida; deriva sin braceo
+1,32,2:35,2:40,nado,media,Rota y se desplaza claramente entre 157.2 y 159.7 s con cuerpo diagonal-horizontal (rng 131)
+2,32,2:35,2:40,inmovilidad,media,Vertical con silueta idéntica en las ocho muestras; rng 38 y actividad baja (me 15.3)
+3,32,2:35,2:40,inmovilidad,baja,Diagonal-vertical estable con hocico fuera; solo cola y pata trasera cambian de posición
+4,32,2:35,2:40,inmovilidad,baja,Vertical mantenido con deriva corta; sin braceo dirigido ni elevación del hocico
+1,33,2:40,2:45,inmovilidad,media,Postura sostenida con hocico a ras y desplazamiento corto; actividad baja (me 15.2)
+2,33,2:40,2:45,inmovilidad,alta,"Ocho muestras superponibles, rng 32 y la actividad más baja del bloque (me 14.7)"
+3,33,2:40,2:45,nado,baja,Vertical en la primera mitad y rotación a diagonal con deriva amplia desde 163.4 s (rng 133)
+4,33,2:40,2:45,inmovilidad,baja,Vertical con deriva lateral y silueta mantenida; hocico a media altura
+1,34,2:45,2:50,nado,baja,Patas delanteras extendidas a los 167.2 s y rotación del cuerpo con desplazamiento posterior
+2,34,2:45,2:50,inmovilidad,alta,"Silueta idéntica en todo el bloque, hocico 34 px sobre el agua; me 14.6 y rng 32"
+3,34,2:45,2:50,inmovilidad,alta,Prácticamente sin desplazamiento (rng 23) y postura vertical invariable pese al hocico alto
+4,34,2:45,2:50,inmovilidad,baja,Vertical con deriva suave y silueta mantenida; sin brazadas
+1,35,2:50,2:55,nado,media,Cuerpo estirado en horizontal con extremidades extendidas entre 170.3 y 171.6 s; recorrido amplio
+2,35,2:50,2:55,nado,baja,Rota el cuerpo a los 172.8 s y deriva a lo largo del cilindro (rng 137)
+3,35,2:50,2:55,nado,baja,Vertical que se desplaza de forma sostenida hacia la derecha (rng 135) con patas traseras activas
+4,35,2:50,2:55,nado,baja,Pasa de vertical a diagonal-horizontal en la segunda mitad con desplazamiento
+1,36,2:55,3:00,nado,baja,Deriva diagonal hacia la derecha con rotación del cuerpo desde 177.8 s
+2,36,2:55,3:00,nado,baja,Pasa de vertical a horizontal al final del bloque con desplazamiento (rng 131)
+3,36,2:55,3:00,inmovilidad,baja,"Vertical con silueta repetida; solo cola y patas traseras se mueven, sin avance"
+4,36,2:55,3:00,inmovilidad,alta,Diagonal con hocico al ras (23 px) y ocho muestras superponibles; me 14.7
+1,37,3:00,3:05,inmovilidad,baja,Vertical sostenido con una extensión aislada de pata delantera a los 182.8 s; sin avance neto
+2,37,3:00,3:05,inmovilidad,baja,Vertical con deriva lenta y postura mantenida; actividad baja (me 16.0)
+3,37,3:00,3:05,inmovilidad,baja,Vertical con hocico alto pero silueta estable y deriva pasiva
+4,37,3:00,3:05,inmovilidad,alta,"Hocico exactamente al nivel del agua (10 px, el mínimo del ensayo) y postura inalterada"
+1,38,3:05,3:10,nado,baja,Deriva diagonal marcada hacia la derecha entre 187.8 y 189.7 s (rng 134)
+2,38,3:05,3:10,inmovilidad,baja,Vertical con deriva y silueta mantenida; actividad baja (me 15.0)
+3,38,3:05,3:10,inmovilidad,baja,"Vertical fijo en un cuadrante con recolocación de patas traseras, sin avance"
+4,38,3:05,3:10,inmovilidad,alta,Ocho muestras idénticas con hocico a ras; me 14.6 y rng 50
+1,39,3:10,3:15,nado,media,Rota el cuerpo de frontal a diagonal con el mayor recorrido del bloque (rng 139)
+2,39,3:10,3:15,inmovilidad,baja,Vertical estable con una extensión de pata delantera a los 193.5 s; sin desplazamiento
+3,39,3:10,3:15,escalamiento,baja,Vertical con hocico 68 px fuera y recolocación continua de patas traseras sin avanzar; límite con inmovilidad
+4,39,3:10,3:15,inmovilidad,alta,"Hocico a ras (13 px), rng 31 y postura sin cambios en todo el bloque"
+1,40,3:15,3:20,nado,baja,Deriva amplia (rng 152) con rotación a diagonal en las dos últimas muestras
+2,40,3:15,3:20,inmovilidad,baja,Vertical con hocico bajo y silueta mantenida; solo agitacion final a los 199.7 s
+3,40,3:15,3:20,inmovilidad,baja,Vertical sin avance con patas traseras recolocándose; hocico alto pero postura fija
+4,40,3:15,3:20,inmovilidad,baja,Vertical con hocico a ras y pata delantera visible a los 196.5 s; sin desplazamiento
+1,41,3:20,3:25,nado,baja,Deriva sostenida hacia la derecha (rng 157) con patas traseras visibles a los 201.5 s
+2,41,3:20,3:25,escalamiento,baja,"Impulso vertical con salpicaduras a los 200.9, 202.8 y 204.1 s y hocico 70 px fuera; sin avance neto"
+3,41,3:20,3:25,inmovilidad,media,Vertical con postura mantenida y rng 45; solo recolocación menor de patas traseras
+4,41,3:20,3:25,inmovilidad,media,Diagonal estable con hocico a media altura y actividad baja (me 15.5)
+1,42,3:25,3:30,nado,baja,Rota de vertical a diagonal-horizontal entre 207.2 y 208.4 s con desplazamiento (rng 139)
+2,42,3:25,3:30,inmovilidad,baja,Vertical con deriva y una extensión aislada de pata delantera a los 207.8 s
+3,42,3:25,3:30,inmovilidad,baja,Vertical sin avance; patas delanteras aparecen hacia la pared solo en la última muestra
+4,42,3:25,3:30,inmovilidad,media,Diagonal-vertical con hocico bajo y silueta constante; me 15.9
+1,43,3:30,3:35,nado,baja,Pasa a diagonal-horizontal desde 212.8 s con desplazamiento amplio (rng 135)
+2,43,3:30,3:35,inmovilidad,media,Vertical con hocico a media altura y silueta repetida; rng 66
+3,43,3:30,3:35,inmovilidad,baja,Diagonal-vertical con deriva pasiva; hocico alto pero sin brazadas dirigidas
+4,43,3:30,3:35,nado,baja,Cuerpo diagonal-horizontal entre 211.0 y 212.2 s con rotación posterior y avance
+1,44,3:35,3:40,inmovilidad,baja,Deriva lateral con silueta diagonal constante; la actividad más baja del bloque (me 14.7)
+2,44,3:35,3:40,inmovilidad,media,Vertical con hocico bajo y ocho muestras superponibles; me 14.9
+3,44,3:35,3:40,inmovilidad,baja,Deriva diagonal sostenida sin cambio de postura ni braceo; me 15.5
+4,44,3:35,3:40,inmovilidad,baja,Diagonal con hocico al ras (18 px) y deriva pasiva hacia la derecha
+1,45,3:40,3:45,inmovilidad,baja,Deriva vertical-diagonal con patas delanteras extendidas solo a los 221.0-221.6 s; sin nado sostenido
+2,45,3:40,3:45,inmovilidad,baja,Vertical con rotación leve y deriva; actividad baja (me 15.9) y hocico a media altura
+3,45,3:40,3:45,inmovilidad,baja,Deriva diagonal constante con un giro lento de la cabeza a los 223.4 s; sin braceo
+4,45,3:40,3:45,inmovilidad,media,Diagonal-vertical prácticamente fijo (rng 40) con hocico fuera del agua
+1,46,3:45,3:50,nado,baja,Rota y hunde la cabeza entre 226.6 y 227.8 s con desplazamiento (rng 128)
+2,46,3:45,3:50,inmovilidad,alta,"Hocico a ras (27 px), silueta invariable y la actividad más baja del ensayo hasta aqui (me 13.0)"
+3,46,3:45,3:50,inmovilidad,media,Ocho muestras superponibles (rng 35); solo cola y pata trasera cambian de posición
+4,46,3:45,3:50,inmovilidad,media,Vertical-diagonal estable con hocico bajo; sin avance ni brazadas
+1,47,3:50,3:55,inmovilidad,baja,Deriva diagonal que se recoge a vertical al final; actividad baja y sin braceo dirigido
+2,47,3:50,3:55,inmovilidad,alta,Silueta idéntica en todo el bloque con hocico a media altura; me 13.7 y rng 39
+3,47,3:50,3:55,inmovilidad,baja,Diagonal que rota a vertical compacto hacia 232.8 s; desplazamiento corto
+4,47,3:50,3:55,inmovilidad,alta,Vertical-diagonal sin cambios apreciables; rng 40 y me 14.7
+1,48,3:55,4:00,inmovilidad,baja,Gira a posición frontal entre 237.8 y 238.5 s pero sin avance sostenido; me 16.4
+2,48,3:55,4:00,inmovilidad,media,Deriva vertical con silueta mantenida; actividad muy baja (me 14.0)
+3,48,3:55,4:00,inmovilidad,baja,Diagonal con hocico fuera y deriva pasiva; patas traseras visibles pero sin propulsión
+4,48,3:55,4:00,inmovilidad,media,Diagonal-vertical estable con hocico a media altura; rng 65
+1,49,4:00,4:05,inmovilidad,media,Vertical-diagonal con silueta mantenida y deriva mínima; sin braceo
+2,49,4:00,4:05,inmovilidad,baja,Deriva vertical con una extensión de pata delantera a los 243.5 s; actividad baja (me 14.7)
+3,49,4:00,4:05,inmovilidad,alta,Prácticamente inmovil (rng 31) con hocico a media altura durante los 5 s
+4,49,4:00,4:05,inmovilidad,baja,Vertical con hocico fuera y deriva lenta hacia la derecha; silueta estable
+1,50,4:05,4:10,nado,baja,Cuerpo diagonal-horizontal que gira a posición frontal entre 247.8 y 248.4 s y vuelve
+2,50,4:05,4:10,inmovilidad,baja,Vertical con hocico alto pero silueta mantenida y deriva corta
+3,50,4:05,4:10,inmovilidad,media,Giro lento del cuerpo a horizontal sin propulsión; la actividad más baja del bloque (me 13.5)
+4,50,4:05,4:10,inmovilidad,alta,"Flotación encorvada contra la pared, idéntica en las ocho muestras; ejemplo claro de inmovilidad"
+1,51,4:10,4:15,nado,baja,Se estira en horizontal y avanza entre 253.4 y 254.7 s tras derivar en diagonal
+2,51,4:10,4:15,inmovilidad,baja,Deriva diagonal con giro solo en la última muestra; actividad baja
+3,51,4:10,4:15,inmovilidad,media,Deriva vertical sostenida con silueta invariable; me 14.3
+4,51,4:10,4:15,inmovilidad,media,Vertical casi fijo (rng 68) con hocico a media altura; elevación leve al final
+1,52,4:15,4:20,inmovilidad,baja,Rota entre diagonal y vertical sin desplazarse de forma sostenida; me 16.3
+2,52,4:15,4:20,nado,baja,Rotación marcada del cuerpo entre 257.2 y 258.4 s con deriva asociada
+3,52,4:15,4:20,inmovilidad,baja,Flotación horizontal estirada en la primera mitad y giro lento despues; actividad muy baja (me 14.5)
+4,52,4:15,4:20,inmovilidad,media,Vertical con hocico a ras (24 px) y silueta mantenida pese a mover patas delanteras
+1,53,4:20,4:25,nado,baja,Cuerpo diagonal-horizontal que se estira y avanza entre 263.4 y 264.7 s
+2,53,4:20,4:25,nado,baja,Patas delanteras extendidas a los 261.6-262.2 s con deriva lateral clara (rng 123)
+3,53,4:20,4:25,nado,baja,Patas delanteras elevadas hacia la pared a los 261.0 s y cuerpo horizontal en movimiento al final
+4,53,4:20,4:25,nado,baja,Vertical con braceo visible de patas delanteras a los 262.2-262.8 s pero sin avance; actividad en alza
+1,54,4:25,4:30,escalamiento,baja,Patas delanteras rompiendo repetidamente la superficie entre 266.6 y 267.8 s con hocico 75 px fuera; repunte de actividad
+2,54,4:25,4:30,escalamiento,baja,"Vertical con elevación del hocico y giro en la segunda mitad, sin cruzar cuadrantes"
+3,54,4:25,4:30,nado,baja,Vertical con braceo visible de las cuatro extremidades y desplazamiento lateral moderado
+4,54,4:25,4:30,inmovilidad,baja,Postura diagonal sin cambio de posición (rng 47) y hocico a ras pese a la alta energía medida; posible inflación por movimiento de cámara
+1,55,4:30,4:35,nado,baja,Cuerpo diagonal-horizontal estirado derivando hacia la derecha (rng 143)
+2,55,4:30,4:35,nado,baja,Secuencia de giros con patas delanteras extendidas y un enrollamiento a los 272.2 s
+3,55,4:30,4:35,escalamiento,baja,Patas delanteras apoyadas contra la pared frontal entre 271.0 y 272.2 s con hocico fuera del agua
+4,55,4:30,4:35,inmovilidad,baja,Diagonal sin desplazamiento con hocico a ras; energía alta atribuible en parte al reencuadre de cámara
+1,56,4:35,4:40,nado,baja,Diagonal con patas traseras extendidas y deriva amplia; hocico alto a los 276.6 s
+2,56,4:35,4:40,nado,media,Cuerpo completamente horizontal entre 276.6 y 277.2 s; único bloque que alcanza tres cuadrantes
+3,56,4:35,4:40,nado,baja,Diagonal-horizontal en movimiento con patas delanteras extendidas al final del bloque
+4,56,4:35,4:40,nado,baja,Diagonal con patas traseras extendidas y deriva sostenida por la mitad superior
+1,57,4:40,4:45,nado,media,Horizontal con remo visible de patas traseras y desplazamiento claro (rng 125)
+2,57,4:40,4:45,inmovilidad,baja,Vertical fijo (rng 49) con hocico a media altura; solo mueve patas traseras
+3,57,4:40,4:45,nado,media,Se desplaza en diagonal hacia la derecha entre 283.5 y 284.7 s; máximo recorrido del bloque (rng 157)
+4,57,4:40,4:45,nado,baja,Diagonal con patas traseras en remo continuo pero sin avance neto; clasificación dudosa
+1,58,4:45,4:50,nado,media,Cuerpo diagonal-horizontal con patas traseras en remo y deriva hacia la derecha (rng 118)
+2,58,4:45,4:50,nado,baja,Vertical con braceo de patas delanteras bajo el mentón y rotación del cuerpo; desplazamiento moderado
+3,58,4:45,4:50,nado,media,Diagonal-horizontal en movimiento con el mayor recorrido del bloque (rng 130)
+4,58,4:45,4:50,inmovilidad,baja,Diagonal con silueta repetida en las ocho muestras y rng 45; solo se mueve la cola
+1,59,4:50,4:55,nado,media,Horizontal estirado al inicio y giro a posición frontal hacia 292.2-292.8 s; verticalidad mínima (0.67)
+2,59,4:50,4:55,inmovilidad,baja,Vertical con patas delanteras recogidas y postura constante; sin avance (rng 54)
+3,59,4:50,4:55,inmovilidad,baja,Vertical fijo con hocico fuera; solo cola y patas traseras cambian de posición
+4,59,4:50,4:55,inmovilidad,baja,Vertical muy estable (verticalidad 0.97) sin desplazamiento; movimientos de sosten
+1,60,4:55,5:00,nado,baja,Hunde la cabeza a los 296.5 s en un amago de buceo y deriva con cuerpo diagonal
+2,60,4:55,5:00,inmovilidad,baja,Vertical con hocico fuera y silueta mantenida pese a la deriva lateral
+3,60,4:55,5:00,nado,baja,Vertical con patas traseras extendidas y en remo entre 296.5 y 297.2 s; deriva asociada
+4,60,4:55,5:00,inmovilidad,baja,Diagonal con patas traseras extendidas y postura estable; deriva sin propulsión clara

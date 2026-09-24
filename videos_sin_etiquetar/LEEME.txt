@@ -1,0 +1,8 @@
+Deja aqui los videos que todavia no han pasado por el etiquetador.
+
+Cuando quieras procesarlos todos de golpe, abre la terminal en fst_auto y pega:
+
+  py etiquetar.py videos_sin_etiquetar/*.MOV --modelo modelo_fst.joblib --tubos 4
+
+Los resultados salen en la carpeta etiquetas/.
+

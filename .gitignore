@@ -1,0 +1,21 @@
+# Videos: pesan cientos de MB y GitHub rechaza archivos de mas de 100 MB.
+videos_sin_etiquetar/*
+!videos_sin_etiquetar/LEEME.txt
+*.MOV
+*.mov
+*.mp4
+*.avi
+
+# Imagenes de control: se regeneran solas y se acumulan una por video.
+etiquetas/*_control.jpg
+
+# Registros de ejecucion
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Los CSV de etiquetas.py SI se versionan: son el conjunto de datos y
+# regenerarlos cuesta 10 minutos por video.
