@@ -53,14 +53,26 @@ descubrirías a los diez minutos de estar procesando.
 
 En Linux o macOS usa `python3` en lugar de `py` en todos los comandos.
 
-### Sobre la versión de scikit-learn
+### Sobre las versiones de numpy y scikit-learn
 
-`modelo_fst.joblib` se guardó con scikit-learn 1.9.1. Cargarlo con otra serie
-funciona pero emite un aviso y puede cambiar las predicciones. `comprobar.py`
-lo detecta. La solución es reentrenar, que toma segundos:
+`modelo_fst.joblib` se guardó con **numpy 2** y **scikit-learn 1.9.1**.
+
+- Con numpy 1.x **no carga**: falla con un error que menciona `PCG64`.
+- Con otra serie de scikit-learn carga, pero avisa y puede cambiar las
+  predicciones.
+
+`comprobar.py` detecta los dos casos. La solución normal es actualizar:
 
 ```bash
-py entrenar.py --carpeta etiquetas --etiquetas mano
+pip install -r requirements.txt
+```
+
+Si en esa máquina no puedes actualizar, reentrena ahí mismo, que toma
+segundos. Usa **solo las etiquetas hechas a mano**: con `--carpeta` entrarían
+también las propuestas de la máquina de los videos que aún no revisaste.
+
+```bash
+py entrenar.py etiquetas/IMG_0826_rasgos.csv=etiquetas/IMG_0826_mano.csv
 ```
 
 ## Uso

@@ -1,12 +1,15 @@
 # Versiones minimas con las que se construyo y midio este etiquetador.
 # Se fijan por abajo, no exactas, para que instale en otras maquinas.
 #
-# scikit-learn se fija a la serie 1.9 a proposito: modelo_fst.joblib se guardo
-# con 1.9.1 y una serie distinta lo carga con aviso y puede cambiar sus
-# predicciones. Si necesitas otra version, vuelve a entrenar el modelo:
-#     py entrenar.py --carpeta etiquetas --etiquetas mano
+# modelo_fst.joblib se guardo con numpy 2 y scikit-learn 1.9.1:
+#   - numpy 1.x NO puede abrirlo (falla con un error sobre PCG64).
+#   - otra serie de scikit-learn lo carga con aviso y puede cambiar sus
+#     predicciones.
+# Si no puedes usar esas versiones, vuelve a entrenar el modelo en esa maquina,
+# solo con las etiquetas hechas a mano:
+#     py entrenar.py etiquetas/IMG_0826_rasgos.csv=etiquetas/IMG_0826_mano.csv
 opencv-python>=4.8
-numpy>=1.24
+numpy>=2.0
 pandas>=2.0
 scikit-learn>=1.9,<1.10
 joblib>=1.3

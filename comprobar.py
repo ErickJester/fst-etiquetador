@@ -34,7 +34,7 @@ else:
 # --- 2. Librerias ---
 NECESARIAS = [
     ('cv2', 'opencv-python', (4, 8)),
-    ('numpy', 'numpy', (1, 24)),
+    ('numpy', 'numpy', (2, 0)),
     ('pandas', 'pandas', (2, 0)),
     ('sklearn', 'scikit-learn', (1, 9)),
     ('joblib', 'joblib', (1, 3)),
@@ -85,7 +85,7 @@ for d in ('videos_sin_etiquetar', 'etiquetas'):
 mp = os.path.join(AQUI, 'modelo_fst.joblib')
 if not os.path.exists(mp):
     linea(AVISO, 'modelo_fst.joblib', 'no esta; podras sacar rasgos pero no etiquetar')
-    avisos.append('Sin modelo. Entrena uno con: py entrenar.py --carpeta etiquetas --etiquetas mano')
+    avisos.append('Sin modelo. Entrena uno con: py entrenar.py etiquetas/IMG_0826_rasgos.csv=etiquetas/IMG_0826_mano.csv')
 elif not faltan:
     try:
         import warnings
@@ -104,13 +104,18 @@ elif not faltan:
                   '%d columnas, pero se guardo con otra version de scikit-learn' % len(cols))
             avisos.append('El modelo se guardo con scikit-learn distinto al tuyo (%s). '
                           'Reentrenalo para que las predicciones sean fiables:\n'
-                          '     py entrenar.py --carpeta etiquetas --etiquetas mano' % sk_ver)
+                          '     py entrenar.py etiquetas/IMG_0826_rasgos.csv=etiquetas/IMG_0826_mano.csv' % sk_ver)
         else:
             linea(OK, 'modelo_fst.joblib',
                   '%d columnas, clases: %s' % (len(cols), ', '.join(clases)))
     except Exception as e:
         linea(MAL, 'modelo_fst.joblib', str(e)[:40])
-        fallas.append('El modelo no carga. Reentrenalo con entrenar.py')
+        # El caso tipico: modelo guardado con numpy 2 y abierto con numpy 1.x,
+        # que falla con un error sobre PCG64.
+        fallas.append('El modelo no carga. Primero actualiza las librerias:\n'
+                      '     pip install -r requirements.txt\n'
+                      '     Si no puedes, reentrenalo en esta maquina:\n'
+                      '     py entrenar.py etiquetas/IMG_0826_rasgos.csv=etiquetas/IMG_0826_mano.csv')
 
 # --- 6. Lectura de video ---
 if 'cv2' not in faltan and not any('opencv' in f for f in faltan):
