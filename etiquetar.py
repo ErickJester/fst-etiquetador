@@ -56,6 +56,11 @@ def una(ruta, args, log=print):
     bl = lib.bloques(filas, g, fps, log=log)
 
     bl.insert(0, 'video', nombre)
+    # Queda anotado porque tres rasgos (path, rng, spanx) dependen de cada
+    # cuantos fotogramas se mide, y mezclar pasos degrada el clasificador sin
+    # dar ningun error. Medido en IMG_0826: paso 12 acierta 0.880 y paso 2
+    # solo 0.770, porque con mas muestras el temblor del recorte se acumula.
+    bl.insert(1, 'paso', args.paso)
     perdidos = int((bl['n_visto'] < 5).sum())
     if perdidos:
         log('  AVISO: %d bloques sin animal visible (quedan sin rasgos)' % perdidos)
@@ -103,6 +108,18 @@ def main():
     p.add_argument('--salida', default='etiquetas')
     args = p.parse_args()
     os.makedirs(args.salida, exist_ok=True)
+
+    # Se comprueba ANTES de tocar ningun video: procesar uno cuesta diez
+    # minutos y no tiene sentido gastarlos para fallar al final.
+    if args.modelo:
+        import joblib
+        paso_mod = joblib.load(args.modelo).get('paso')
+        if paso_mod and paso_mod != args.paso:
+            raise SystemExit(
+                'Este modelo se entreno con --paso=%d y pediste --paso=%d.\n'
+                'Los rasgos path, rng y spanx cambian con el paso, asi que las\n'
+                'etiquetas saldrian sesgadas sin dar ningun error.\n'
+                'Vuelve a lanzarlo con --paso=%d.' % (paso_mod, args.paso, paso_mod))
 
     hechos, rotos = [], []
     for v in args.videos:

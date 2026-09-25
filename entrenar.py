@@ -147,7 +147,17 @@ def main():
               % (u, m.sum(), 100 * m.mean(), accuracy_score(y[m], pr[m])))
 
     import joblib
+    pasos = sorted(pd.unique(d['paso'])) if 'paso' in d.columns else []
+    if len(pasos) > 1:
+        raise SystemExit(
+            'Los rasgos vienen con pasos distintos (%s) y no son comparables:\n'
+            'path, rng y spanx cambian con el paso. Vuelve a extraer todos los\n'
+            'videos con el mismo --paso antes de entrenar.'
+            % ', '.join(str(p) for p in pasos))
+    if pasos:
+        print('\nextraidos con --paso=%d' % pasos[0])
     joblib.dump(dict(modelo=clf, caracteristicas=list(lib.RASGOS),
+                     paso=int(pasos[0]) if pasos else None,
                      clases=list(clf.classes_), n_bloques=len(d),
                      videos=sorted(pd.unique(d['video']).tolist())), args.salida)
     print('\nmodelo -> %s' % args.salida)

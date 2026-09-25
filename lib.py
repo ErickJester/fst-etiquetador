@@ -22,6 +22,15 @@ BRIGHT_THR = 80    # brillo absoluto minimo (rata clara sobre agua oscura)
 ERODE_TAIL = 21    # borra la cola antes de medir la postura
 BLOCK_S    = 5.0   # duracion del bloque de puntuacion
 
+# Separacion temporal fija, en segundos, para las medidas que comparan dos
+# instantes (energia de movimiento, IoU, Dice). Se fija en TIEMPO y no en
+# fotogramas para que --paso no altere los valores: con paso 12 hay 0.40 s
+# entre mediciones y con paso 2 solo 0.067 s, asi que comparar contra "el
+# anterior" daria numeros tres veces menores y el modelo lo leeria como
+# quietud. El valor 0.40 es el que se uso al medir el rendimiento.
+DT_REF     = 0.40
+DWELL_S    = 0.20  # permanencia minima en un cuadrante para contarlo
+
 K5  = np.ones((5, 5), np.uint8)
 K9  = np.ones((9, 9), np.uint8)
 K15 = np.ones((15, 15), np.uint8)
@@ -330,7 +339,12 @@ def extraer(ruta, lut, WH, fondo, g, fps, log=print):
     W, H = WH
     bg = fondo.astype(np.int16)
     ya, ra, rb = g['y_agua'], g['roi_arriba'], g['roi_abajo']
-    filas, prev_g, prev_m = [], {}, {}
+    # Por cada tubo se guarda un historial corto de (instante, recorte,
+    # mascara). Las medidas dinamicas no se toman contra el fotograma anterior
+    # sino contra el mas cercano a DT_REF segundos atras, de modo que --paso
+    # cambia el coste de calculo pero no los valores.
+    from collections import deque
+    filas, hist = [], {}
     cap = cv2.VideoCapture(ruta)
     cur = -1
     while True:
@@ -379,20 +393,32 @@ def extraer(ruta, lut, WH, fondo, g, fps, log=print):
                         r['cabeza'] = float(ys.min() + ra)
                         # largo del cuerpo = 4 sigma del eje mayor
                         r['largo']  = float(4 * np.sqrt(max(l1, 1e-6)))
-            if s in prev_g:
-                pm = prev_m.get(s)
+            h = hist.setdefault(s, deque())
+            # el fotograma mas reciente que quede al menos DT_REF atras; si el
+            # historial aun no llega tan lejos, el mas antiguo disponible
+            ref = None
+            for reg in reversed(h):
+                if t - reg[0] >= DT_REF:
+                    ref = reg
+                    break
+            if ref is None and h:
+                ref = h[0]
+            if ref is not None:
+                _, proi, pm = ref
                 if blob is not None and pm is not None:
                     sel = cv2.dilate(((blob | pm) > 0).astype(np.uint8), K15) > 0
                     if sel.sum() > 50:
                         # energia de movimiento SOLO dentro del animal: el
                         # oleaje del agua satura la medida si se toma la ROI
-                        r['me'] = float(np.abs(roi - prev_g[s])[sel].mean())
+                        r['me'] = float(np.abs(roi - proi)[sel].mean())
                     inter = float((blob & pm).sum())
                     union = float((blob | pm).sum())
                     a1, a2 = float(blob.sum()), float(pm.sum())
                     r['iou']  = inter / union if union else np.nan
                     r['dice'] = 2 * inter / (a1 + a2) if (a1 + a2) else np.nan
-            prev_g[s], prev_m[s] = roi.copy(), blob
+            h.append((t, roi.copy(), blob))
+            while len(h) > 2 and t - h[0][0] > 2 * DT_REF:
+                h.popleft()
             filas.append(r)
         if cur % 3000 == 0:
             log('    extraccion t=%.0fs' % t)
@@ -443,7 +469,11 @@ def bloques(filas, g, fps, escala=None, log=print):
             qx = (xs >= (x0 + x1) / 2).astype(int)
             qy = (np.clip(ys, ya, yf) >= y_medio).astype(int)
             q = qy * 2 + qx
-            r['nq'] = int(sum(1 for k in range(4) if (q == k).sum() >= 3))
+            # Permanencia minima en TIEMPO, no en fotogramas: con paso 2 hay
+            # 75 mediciones por bloque y con paso 12 solo 12, asi que exigir
+            # "3 fotogramas" significaria 0.2 s en un caso y 1.2 s en el otro.
+            minimo = max(2, int(round(DWELL_S * len(xs) / max(dur, 1e-3))))
+            r['nq'] = int(sum(1 for k in range(4) if (q == k).sum() >= minimo))
             cab = d['cabeza'].to_numpy()[ok]
             if np.isfinite(cab).any():
                 r['hrise'] = float(np.nanmax(ya - cab)) / col

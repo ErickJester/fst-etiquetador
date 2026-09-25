@@ -118,3 +118,29 @@ de cortesía. Listas de 5 como mucho. Termina siempre con una sola cosa que pued
 hacer ahora.
 
 Y no le vendas números que no se hayan medido.
+
+## El parametro --paso: medido, no supuesto
+
+Mas detalle NO es mejor. Sobre `IMG_0826`, mismos bloques y mismas etiquetas:
+
+| | paso 12 | paso 2 |
+|---|---|---|
+| Exactitud | **0.880** | 0.770 |
+| f1 escalamiento | **0.786** | 0.476 |
+| Filtrado a 0.80 | **0.929** | 0.857 |
+
+Causa: `path` y `rng` acumulan el temblor del centroide. Con 75 muestras por
+bloque en vez de 12, ese temblor se suma seis veces mas. `path` sale 2.06 veces
+mayor a paso 2, y la rata no anduvo el doble.
+
+**Usar siempre `--paso=12`.** El modelo guarda el paso con el que se entreno y
+`etiquetar.py` se niega a correr con otro, antes de procesar nada.
+
+Rasgos que SI son independientes del paso tras el arreglo de `DT_REF`
+(razon entre paso 2 y paso 12): `me` 1.00, `iou` 1.00, `dice` 1.00,
+`vert` 1.00, `area` 1.00, `elong` 1.00.
+
+Rasgos que siguen dependiendo: `path` 2.06, `rng` 1.29, `spanx` 1.23, `nq` 1.11.
+Se podrian arreglar remuestreando la trayectoria a una rejilla temporal fija
+antes de medirla. No se hizo porque paso 12 ya es el mejor y el candado impide
+mezclar.
