@@ -426,6 +426,36 @@ def extraer(ruta, lut, WH, fondo, g, fps, log=print):
     return filas
 
 
+def cajas_crudas(bl, lut, g, fps):
+    """Anade bx0, by0, bx1, by1: el recuadro de cada tubo en coordenadas del
+    video TAL COMO SE VE, en el instante medio de cada bloque.
+
+    Toda la geometria vive en el marco de referencia estabilizado. Eso sirve
+    para medir, pero no para dibujar sobre el video original: si la camara se
+    movio, el recuadro cae fuera de la rata. En IMG_0840 la camara se desplaza
+    unos 200 px entre el segundo 55 y el 184. Se deshace el registro con la
+    inversa de la matriz del fotograma mas cercano a la mitad del bloque."""
+    idx = np.array(sorted(lut))
+    tiempos = idx / fps
+    col = g['y_fondo'] - g['y_agua']
+    arriba = max(0.0, g['y_agua'] - 0.45 * col)
+    abajo = g['y_fondo'] + 0.05 * col
+    cajas = []
+    for b, s in zip(bl['bloque'], bl['especimen']):
+        medio = (int(b) - 0.5) * BLOCK_S
+        i = int(idx[np.argmin(np.abs(tiempos - medio))])
+        inv = cv2.invertAffineTransform(np.asarray(lut[i], np.float64))
+        x0, x1 = g['tubos'][int(s)]
+        esq = np.array([[x0, arriba], [x1, arriba], [x0, abajo], [x1, abajo]], np.float64)
+        q = esq @ inv[:, :2].T + inv[:, 2]
+        cajas.append((int(q[:, 0].min()), int(q[:, 1].min()),
+                      int(q[:, 0].max()), int(q[:, 1].max())))
+    bl = bl.copy()
+    for j, c in enumerate(('bx0', 'by0', 'bx1', 'by1')):
+        bl[c] = [k[j] for k in cajas]
+    return bl
+
+
 # ----------------- 5. rasgos por bloque, normalizados -----------------
 
 def bloques(filas, g, fps, escala=None, log=print):

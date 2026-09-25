@@ -120,6 +120,7 @@ videos, no al cambiar el código.
 | Archivo | Contenido |
 |---|---|
 | `comprobar.py` | Verifica que la máquina pueda correr todo. Se ejecuta primero |
+| `revisor.html` | Página para revisar las propuestas como un juego: video, línea de tiempo y cinco botones. Se abre con doble clic |
 | `lib.py` | Registro de cámara, modelo de fondo, geometría automática, extracción de rasgos |
 | `etiquetar.py` | Video → CSV de rasgos y etiquetas |
 | `entrenar.py` | CSV etiquetados → modelo, con validación agrupada por video |

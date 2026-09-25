@@ -22,3 +22,6 @@ __pycache__/
 
 # Videitos de revision: se regeneran con revisar.py y pesan decenas de MB.
 revision/
+
+# Configuracion local del editor
+.claude/

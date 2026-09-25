@@ -1,0 +1,821 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Revisor FST</title>
+<!--
+  Revisor de etiquetas del test de nado forzado.
+
+  Abre este archivo con doble clic (Chrome o Edge). Arrastra el video y el
+  *_rasgos.csv que dejo etiquetar.py. Al terminar guarda un *_mano.csv que
+  entrenar.py entiende sin tocar nada.
+
+  Todo ocurre en tu computadora: el video no se sube a ningun sitio.
+
+  Teclas:  1 2 3  conducta   Enter  conducta activa   R  repetir
+           0  no estoy seguro   Espacio  pausa   <- ->  moverse   Ctrl+S  guardar
+-->
+<style>
+:root{
+  --bg:#0d1117; --panel:#151b23; --panel2:#1c242e; --line:#2b3440;
+  --text:#e6edf3; --muted:#8b98a6;
+  --inm:#4c8dff; --nado:#2fd27c; --esc:#ff7a45; --gold:#f5c542; --none:#6b7584;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.35}
+
+#app{display:grid;grid-template-rows:auto 1fr auto auto;height:100vh}
+
+/* ---------- cabecera ---------- */
+#top{display:flex;align-items:center;gap:18px;padding:10px 18px;background:var(--panel);
+  border-bottom:1px solid var(--line);min-height:52px}
+#top .titulo{font-weight:700;letter-spacing:.2px;white-space:nowrap}
+#top .titulo small{color:var(--muted);font-weight:500;margin-left:8px}
+#prog{flex:1;display:flex;align-items:center;gap:10px;min-width:160px;max-width:420px}
+#progBar{flex:1;height:10px;border-radius:99px;background:var(--panel2);overflow:hidden}
+#progFill{height:100%;width:0;background:linear-gradient(90deg,var(--gold),#ffdd7a);
+  border-radius:99px;transition:width .35s cubic-bezier(.2,.8,.2,1)}
+#progTxt{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+#chips{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+.chip{padding:4px 10px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);
+  color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.chip b{color:var(--text)}
+#btnGuardar{padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel2)}
+#btnGuardar:hover{border-color:var(--gold);color:var(--gold)}
+
+/* ---------- escenario ---------- */
+#stage{position:relative;overflow:hidden;background:#000;min-height:0}
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+/* El oscurecido son cuatro velos de tamano normal alrededor del tubo. Con una
+   sombra o un outline gigantes, Chrome deja de pintarlos mientras el video se
+   reproduce y el foco desaparece a ratos. */
+#spot{position:absolute;border:3px solid var(--gold);border-radius:6px;pointer-events:none;display:none}
+#spot,.velo{transition:left .25s ease,top .25s ease,width .25s ease,height .25s ease}
+.velo{position:absolute;background:rgba(0,0,0,.58);pointer-events:none;display:none}
+#spot span{position:absolute;top:-30px;left:-3px;background:var(--gold);color:#111;font-weight:800;
+  padding:3px 10px;border-radius:6px 6px 0 0;white-space:nowrap}
+.badge{position:absolute;top:14px;padding:8px 14px;border-radius:10px;
+  background:rgba(13,17,23,.82);border:1px solid var(--line);backdrop-filter:blur(6px)}
+#info{left:14px;font-weight:600}
+#info .t{color:var(--muted);font-weight:500;margin-left:6px}
+#prop{right:14px;text-align:right}
+#prop .lab{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+#prop .val{font-size:18px;font-weight:800}
+#prop .conf{color:var(--muted);font-weight:500;font-size:13px;margin-left:6px}
+#segBar{position:absolute;left:0;right:0;bottom:0;height:5px;background:rgba(255,255,255,.08)}
+#segFill{height:100%;width:0;background:var(--gold)}
+#fin{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);padding:7px 14px;
+  border-radius:99px;background:rgba(13,17,23,.85);border:1px solid var(--line);color:var(--muted);
+  display:none}
+#fin b{color:var(--text)}
+#toast{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.9);
+  padding:14px 26px;border-radius:14px;font-size:22px;font-weight:800;opacity:0;pointer-events:none;
+  background:rgba(13,17,23,.92);border:2px solid var(--line);transition:opacity .15s,transform .15s}
+#toast.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+/* ---------- linea de tiempo ---------- */
+#tl{background:var(--panel);border-top:1px solid var(--line);padding:8px 18px 10px}
+.tlg{display:grid;grid-template-columns:70px 1fr;column-gap:10px}
+.tlLabs .r{height:18px}
+.tlLabs .l{height:26px;display:flex;align-items:center;color:var(--muted);font-size:12px;font-weight:600}
+.tlLabs .l.act{color:var(--gold)}
+#tlMain{position:relative}
+#ruler{position:relative;height:18px;color:var(--muted);font-size:11px}
+#ruler .tick{position:absolute;bottom:0;width:1px;height:5px;background:var(--line)}
+#ruler .tick.big{height:9px;background:var(--muted)}
+#ruler .txt{position:absolute;top:0;transform:translateX(-50%);font-variant-numeric:tabular-nums}
+.track{position:relative;height:26px;border-radius:5px;background:var(--panel2)}
+.track+.track{margin-top:0}
+.b{position:absolute;top:3px;bottom:3px;border-radius:3px;cursor:pointer;
+  box-shadow:inset -1px 0 0 var(--panel2);transition:transform .12s,opacity .12s,filter .12s}
+.b:hover{filter:brightness(1.35)}
+.b[data-c=inmovilidad]{background:var(--inm)}
+.b[data-c=nado]{background:var(--nado)}
+.b[data-c=escalamiento]{background:var(--esc)}
+.b[data-c=""]{background:var(--none)}
+.b.maquina{opacity:.3}
+.b.pend{opacity:.62;background-image:repeating-linear-gradient(135deg,rgba(0,0,0,.35) 0 3px,transparent 3px 7px)}
+.b.duda{background:var(--none)!important;opacity:.95}
+.b.duda::after{content:"?";position:absolute;inset:0;display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff}
+.b.cur{outline:2px solid #fff;outline-offset:1px;z-index:3;transform:scaleY(1.25);opacity:1}
+#playhead{position:absolute;top:0;bottom:0;width:2px;background:#fff;box-shadow:0 0 6px #fff8;
+  pointer-events:none;left:0;z-index:4}
+
+/* ---------- botones ---------- */
+#ctl{background:var(--panel);padding:10px 18px 14px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.fila{display:flex;gap:12px;justify-content:center;width:100%}
+.cls{--c:var(--inm);flex:1;max-width:320px;height:66px;border-radius:14px;border:2px solid var(--c);
+  background:color-mix(in srgb,var(--c) 14%,transparent);font-size:19px;font-weight:750;
+  display:flex;align-items:center;justify-content:center;gap:12px;transition:background .12s,transform .08s}
+.cls:hover{background:color-mix(in srgb,var(--c) 26%,transparent)}
+.cls[data-c=nado]{--c:var(--nado)}
+.cls[data-c=escalamiento]{--c:var(--esc)}
+.cls.sug{box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 35%,transparent)}
+.key{font-size:12px;font-weight:700;padding:2px 7px;border-radius:6px;border:1px solid currentColor;opacity:.75}
+.aux{height:50px;min-width:230px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);
+  font-size:16px;font-weight:650;display:flex;align-items:center;justify-content:center;gap:10px;padding:0 18px;
+  transition:background .12s,transform .08s}
+.aux:hover{background:#243040}
+#btnActiva{--c:var(--gold);border-color:var(--c);background:color-mix(in srgb,var(--c) 12%,transparent)}
+#btnActiva:hover{background:color-mix(in srgb,var(--c) 22%,transparent)}
+#btnActiva .nom{color:var(--c)}
+.hit{animation:hit .2s ease}
+@keyframes hit{0%{transform:scale(1)}40%{transform:scale(.95)}100%{transform:scale(1)}}
+#pista{color:var(--muted);font-size:12px}
+#pista kbd{font:inherit;font-weight:700;color:var(--text);padding:0 5px;border:1px solid var(--line);border-radius:4px}
+
+/* ---------- pantallas superpuestas ---------- */
+.capa{position:fixed;inset:0;background:rgba(8,11,15,.86);backdrop-filter:blur(6px);
+  display:grid;place-items:center;z-index:50;padding:16px}
+.capa[hidden]{display:none}
+.card{width:min(620px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;
+  padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.5);max-height:92vh;overflow:auto}
+.card h1{margin:0 0 6px;font-size:26px}
+.card p{color:var(--muted);margin:0 0 18px}
+#drop{border:2px dashed var(--line);border-radius:14px;padding:26px;text-align:center;
+  transition:border-color .15s,background .15s}
+#drop.over{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 7%,transparent)}
+#drop .big{font-size:17px;font-weight:650;margin-bottom:10px}
+.elegir{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.elegir button{padding:8px 14px;border-radius:9px;border:1px solid var(--line);background:var(--panel2)}
+.estado{margin:16px 0 0;display:grid;gap:6px}
+.estado div{display:flex;gap:10px;align-items:baseline}
+.estado .ok{color:var(--nado)} .estado .no{color:var(--muted)} .estado .mal{color:var(--esc)}
+#modos{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}
+.modo{text-align:left;padding:14px;border-radius:12px;border:2px solid var(--line);background:var(--panel2)}
+.modo b{display:block;font-size:22px}
+.modo span{color:var(--muted);font-size:13px}
+.modo.sel{border-color:var(--gold)}
+.primario{width:100%;height:54px;border-radius:12px;border:0;background:var(--gold);color:#111;
+  font-size:18px;font-weight:800}
+.primario:hover{filter:brightness(1.07)}
+.secundario{width:100%;height:46px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);
+  font-weight:650;margin-top:10px}
+#aviso{margin-top:12px;color:var(--esc);font-size:13px;min-height:1em}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}
+.stat{background:var(--panel2);border-radius:12px;padding:14px;text-align:center}
+.stat b{display:block;font-size:28px}
+.stat span{color:var(--muted);font-size:12px}
+table.cambios{width:100%;border-collapse:collapse;margin:0 0 18px;font-size:13px}
+table.cambios td{padding:6px 8px;border-bottom:1px solid var(--line)}
+table.cambios td:last-child{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.paso{background:var(--panel2);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--muted);margin-top:14px}
+.paso code{color:var(--text);font-size:12.5px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <div class="titulo">Revisor FST <small id="nomVideo"></small></div>
+    <div id="prog"><div id="progBar"><div id="progFill"></div></div><div id="progTxt">0 / 0</div></div>
+    <div id="chips">
+      <div class="chip" title="Bloques donde confirmaste la propuesta">✓ <b id="cOk">0</b> coinciden</div>
+      <div class="chip" title="Bloques donde elegiste otra conducta">✎ <b id="cCambio">0</b> corregidas</div>
+      <div class="chip" title="Bloques que marcaste como dudosos (tecla 0)">? <b id="cDuda">0</b></div>
+      <div class="chip" id="chipEta" title="Estimado con tu ritmo de los ultimos bloques">≈ <b id="cEta">–</b></div>
+    </div>
+    <button id="btnGuardar" title="Guardar la hoja (Ctrl+S)">Guardar</button>
+  </header>
+
+  <main id="stage">
+    <video id="video" muted playsinline preload="auto"></video>
+    <div class="velo"></div><div class="velo"></div><div class="velo"></div><div class="velo"></div>
+    <div id="spot"><span id="spotTxt">Tubo 1</span></div>
+    <div class="badge" id="info">—</div>
+    <div class="badge" id="prop"><div class="lab">La máquina dice</div><div class="val" id="propVal">—</div></div>
+    <div id="fin">Fin del fragmento · <b>R</b> para repetir</div>
+    <div id="toast"></div>
+    <div id="segBar"><div id="segFill"></div></div>
+  </main>
+
+  <section id="tl">
+    <div class="tlg">
+      <div class="tlLabs" id="tlLabs"><div class="r"></div></div>
+      <div id="tlMain"><div id="ruler"></div><div id="tracks"></div><div id="playhead"></div></div>
+    </div>
+  </section>
+
+  <footer id="ctl">
+    <div class="fila">
+      <button class="cls" data-c="inmovilidad"><span class="key">1</span>Inmovilidad</button>
+      <button class="cls" data-c="nado"><span class="key">2</span>Nado</button>
+      <button class="cls" data-c="escalamiento"><span class="key">3</span>Escalamiento</button>
+    </div>
+    <div class="fila">
+      <button class="aux" id="btnRepetir"><span class="key">R</span>↻ Repetir</button>
+      <button class="aux" id="btnActiva"><span class="key">Enter</span>✓ Conducta activa · <span class="nom" id="activaNom">—</span></button>
+    </div>
+    <div id="pista"><kbd>0</kbd> no estoy seguro · <kbd>Espacio</kbd> pausa · <kbd>←</kbd><kbd>→</kbd> moverse · clic en la línea de tiempo para volver a cualquier bloque</div>
+  </footer>
+</div>
+
+<!-- ======== pantalla de inicio ======== -->
+<div class="capa" id="inicio">
+  <div class="card">
+    <h1>Revisor FST</h1>
+    <p>Mira cada fragmento de 5 segundos y di qué conducta ves. La máquina ya propuso una; tú decides si tiene razón.</p>
+    <div id="drop">
+      <div class="big">Arrastra aquí el video y su <code>_rasgos.csv</code></div>
+      <div class="elegir">
+        <button id="pickVideo">Elegir video</button>
+        <button id="pickCsv">Elegir CSV</button>
+      </div>
+      <input type="file" id="inVideo" accept="video/*,.mov,.MOV,.mp4" hidden>
+      <input type="file" id="inCsv" accept=".csv,text/csv" hidden>
+    </div>
+    <div class="estado">
+      <div><span id="eVideo" class="no">○</span><span id="tVideo">Video: sin elegir</span></div>
+      <div><span id="eCsv" class="no">○</span><span id="tCsv">Etiquetas: sin elegir</span></div>
+    </div>
+    <div id="modos" hidden>
+      <button class="modo sel" data-m="dudosos"><b id="nDud">0</b><span>Solo donde la máquina dudó</span></button>
+      <button class="modo" data-m="todos"><b id="nTod">0</b><span>Todo el video, bloque por bloque</span></button>
+    </div>
+    <button class="primario" id="btnEmpezar" disabled>Empezar</button>
+    <div id="aviso"></div>
+  </div>
+</div>
+
+<!-- ======== pantalla final ======== -->
+<div class="capa" id="final" hidden>
+  <div class="card">
+    <h1>🏁 ¡Revisado!</h1>
+    <p id="finResumen"></p>
+    <div class="stats">
+      <div class="stat"><b id="fOk" style="color:var(--nado)">0</b><span>coincidiste con la máquina</span></div>
+      <div class="stat"><b id="fCambio" style="color:var(--gold)">0</b><span>la corregiste</span></div>
+      <div class="stat"><b id="fDuda" style="color:var(--muted)">0</b><span>dudosos, se descartan</span></div>
+    </div>
+    <table class="cambios" id="tabCambios"></table>
+    <button class="primario" id="btnGuardarFin">Guardar la hoja</button>
+    <button class="secundario" id="btnTodo">Seguir con el resto del video</button>
+    <button class="secundario" id="btnCerrar">Volver a mirar</button>
+    <div class="paso">Guarda el archivo en <code>fst_auto/etiquetas/</code> con el nombre que te propone, y después corre:<br>
+      <code>py entrenar.py --carpeta etiquetas --etiquetas mano</code></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const CLASES = ['inmovilidad', 'nado', 'escalamiento'];
+const NOMBRE = {inmovilidad: 'Inmovilidad', nado: 'Nado', escalamiento: 'Escalamiento'};
+const COLOR = {inmovilidad: 'var(--inm)', nado: 'var(--nado)', escalamiento: 'var(--esc)'};
+const BLOQUE_S = 5;
+const $ = s => document.querySelector(s);
+const video = $('#video');
+
+const S = {
+  rows: [], byKey: new Map(), tubos: [], queue: [], cur: null,
+  labels: {},              // key -> {clase:'nado'|'' , prop}
+  videoName: '', videoOk: false, csvOk: false, mode: 'dudosos',
+  dur: 0, segT0: 0, segT1: 0, raf: 0, marcas: [], blockEls: new Map(),
+};
+
+/* ---------------- CSV ---------------- */
+function sinAcentos(s) { return s.normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+
+function parseCSV(text) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const out = []; let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; }
+      else f += c;
+    } else if (c === '"') q = true;
+    else if (c === ',') { row.push(f); f = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(f); f = '';
+      if (row.length > 1 || row[0] !== '') out.push(row);
+      row = [];
+    } else f += c;
+  }
+  if (f !== '' || row.length) { row.push(f); out.push(row); }
+  if (!out.length) return [];
+  const head = out.shift().map(h => sinAcentos(h.trim().toLowerCase()));
+  return out.map(r => Object.fromEntries(head.map((h, i) => [h, (r[i] ?? '').trim()])));
+}
+
+function cargarCSV(text, nombreArchivo) {
+  const recs = parseCSV(text);
+  if (!recs.length) throw new Error('El CSV está vacío.');
+  for (const k of ['bloque', 'especimen'])
+    if (!(k in recs[0])) throw new Error(`Al CSV le falta la columna "${k}". ¿Es el que sale de etiquetar.py?`);
+  if (!('clase' in recs[0]))
+    throw new Error('Este CSV no trae propuestas. Corre etiquetar.py con --modelo=modelo_fst.joblib.');
+
+  const rows = [];
+  for (const r of recs) {
+    const bloque = parseInt(r.bloque, 10), esp = parseInt(r.especimen, 10);
+    if (!Number.isFinite(bloque) || !Number.isFinite(esp)) continue;
+    const conf = parseFloat(r.confianza);
+    const prop = CLASES.includes(r.clase) ? r.clase : '';
+    let usar = r.usar !== undefined && r.usar !== '' ? parseInt(r.usar, 10)
+                                                   : (conf >= 0.8 ? 1 : 0);
+    if (!prop) usar = 0;
+    // Preferencia: recuadro en coordenadas del video tal como se ve (bx*).
+    // Si no esta, el del marco estabilizado (gx*), que cae desplazado cuando
+    // la camara se movio.
+    const bx = ['bx0', 'by0', 'bx1', 'by1'].map(k => parseFloat(r[k]));
+    const g = ['gx0', 'gx1', 'g_agua', 'g_fondo'].map(k => parseFloat(r[k]));
+    let geo = null;
+    if (bx.every(Number.isFinite)) geo = {x0: bx[0], y0: bx[1], x1: bx[2], y1: bx[3], real: true};
+    else if (g.every(Number.isFinite)) {
+      const col = g[3] - g[2];
+      geo = {x0: g[0], x1: g[1], y0: Math.max(0, g[2] - 0.45 * col), y1: g[3] + 0.05 * col, real: false};
+    }
+    const t0 = r.t0 !== undefined && r.t0 !== '' ? parseFloat(r.t0) : (bloque - 1) * BLOQUE_S;
+    rows.push({key: `${esp}-${bloque}`, bloque, esp, t0, t1: t0 + BLOQUE_S, prop, conf, usar, geo});
+  }
+  rows.sort((a, b) => a.esp - b.esp || a.bloque - b.bloque);
+  S.rows = rows;
+  S.byKey = new Map(rows.map(r => [r.key, r]));
+  S.tubos = [...new Set(rows.map(r => r.esp))].sort((a, b) => a - b);
+  S.dur = Math.max(...rows.map(r => r.t1));
+  S.csvVideo = recs[0].video || nombreArchivo.replace(/_rasgos\.csv$/i, '').replace(/\.csv$/i, '');
+  return rows;
+}
+
+/* ---------------- guardado local del progreso ---------------- */
+const claveLocal = () => `fst-revisor:v1:${S.csvVideo}:${S.rows.length}`;
+function guardarLocal() {
+  try { localStorage.setItem(claveLocal(), JSON.stringify({labels: S.labels, mode: S.mode, cur: S.cur})); }
+  catch (e) { /* navegacion privada o almacenamiento bloqueado: se sigue sin memoria */ }
+}
+function leerLocal() {
+  try { return JSON.parse(localStorage.getItem(claveLocal()) || 'null'); } catch (e) { return null; }
+}
+
+/* ---------------- cola ---------------- */
+function armarCola() {
+  S.queue = S.rows.filter(r => S.mode === 'todos' || r.usar === 0).map(r => r.key);
+}
+const hecho = k => S.labels[k] !== undefined;
+function siguientePendiente(desde) {
+  const q = S.queue;
+  if (!q.length) return null;
+  let i = q.indexOf(desde);
+  for (let n = 0; n < q.length; n++) {
+    i = (i + 1) % q.length;
+    if (!hecho(q[i])) return q[i];
+  }
+  return null;
+}
+
+/* ---------------- linea de tiempo ---------------- */
+function construirLinea() {
+  const labs = $('#tlLabs'), tracks = $('#tracks'), ruler = $('#ruler');
+  labs.innerHTML = '<div class="r"></div>';
+  tracks.innerHTML = ''; ruler.innerHTML = ''; S.blockEls.clear();
+  for (let t = 0; t <= S.dur + 0.01; t += 10) {
+    const big = t % 60 === 0;
+    const x = (t / S.dur) * 100;
+    ruler.insertAdjacentHTML('beforeend', `<div class="tick${big ? ' big' : ''}" style="left:${x}%"></div>`);
+    if (big) ruler.insertAdjacentHTML('beforeend',
+      `<div class="txt" style="left:${Math.min(x, 98)}%">${Math.floor(t / 60)}:00</div>`);
+  }
+  for (const s of S.tubos) {
+    labs.insertAdjacentHTML('beforeend', `<div class="l" data-s="${s}">Tubo ${s}</div>`);
+    const tr = document.createElement('div');
+    tr.className = 'track';
+    for (const r of S.rows.filter(r => r.esp === s)) {
+      const el = document.createElement('div');
+      el.className = 'b';
+      el.style.left = (r.t0 / S.dur * 100) + '%';
+      el.style.width = (BLOQUE_S / S.dur * 100) + '%';
+      el.addEventListener('click', () => irA(r.key));
+      tr.appendChild(el);
+      S.blockEls.set(r.key, el);
+    }
+    tracks.appendChild(tr);
+  }
+  for (const r of S.rows) pintarBloque(r.key);
+}
+
+function pintarBloque(k) {
+  const el = S.blockEls.get(k), r = S.byKey.get(k);
+  if (!el || !r) return;
+  const h = S.labels[k];
+  const enCola = S.queue.includes(k);
+  el.dataset.c = h ? h.clase : r.prop;
+  el.classList.toggle('maquina', !h && !enCola);
+  el.classList.toggle('pend', !h && enCola);
+  el.classList.toggle('duda', !!h && h.clase === '');
+  el.classList.toggle('cur', k === S.cur);
+  const tu = h ? (h.clase ? NOMBRE[h.clase] : 'no seguro') : '—';
+  el.title = `Tubo ${r.esp} · bloque ${r.bloque} · ${r.t0}–${r.t1} s\n` +
+             `máquina: ${r.prop ? NOMBRE[r.prop] : 'sin propuesta'}` +
+             (Number.isFinite(r.conf) ? ` (${Math.round(r.conf * 100)}%)` : '') + `\ntú: ${tu}`;
+}
+
+/* ---------------- foco sobre el tubo ---------------- */
+function ubicarFoco() {
+  const spot = $('#spot'), r = S.byKey.get(S.cur);
+  const velos = document.querySelectorAll('.velo');
+  if (!r || !r.geo || !video.videoWidth) {
+    spot.style.display = 'none';
+    velos.forEach(v => v.style.display = 'none');
+    return;
+  }
+  const st = $('#stage').getBoundingClientRect();
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const k = Math.min(st.width / vw, st.height / vh);
+  const ox = (st.width - vw * k) / 2, oy = (st.height - vh * k) / 2;
+  const x0 = Math.max(0, r.geo.x0), x1 = Math.min(vw, r.geo.x1);
+  const y0 = Math.max(0, r.geo.y0), y1 = Math.min(vh, r.geo.y1);
+  const L = ox + x0 * k, T = oy + y0 * k, W = (x1 - x0) * k, Hh = (y1 - y0) * k;
+  Object.assign(spot.style, {display: 'block', left: L + 'px', top: T + 'px',
+                             width: W + 'px', height: Hh + 'px'});
+  // arriba, abajo, izquierda, derecha del tubo
+  const cajas = [[0, 0, st.width, T], [0, T + Hh, st.width, st.height - T - Hh],
+                 [0, T, L, Hh], [L + W, T, st.width - L - W, Hh]];
+  velos.forEach((v, i) => {
+    const [x, y, w, h] = cajas[i];
+    Object.assign(v.style, {display: 'block', left: x + 'px', top: y + 'px',
+                            width: Math.max(0, w) + 'px', height: Math.max(0, h) + 'px'});
+  });
+  $('#spotTxt').textContent = `Tubo ${r.esp}`;
+}
+
+/* ---------------- reproduccion ---------------- */
+function reproducir() {
+  const r = S.byKey.get(S.cur);
+  if (!r || !S.videoOk) return;
+  S.segT0 = r.t0; S.segT1 = Math.min(r.t1, video.duration || r.t1);
+  $('#fin').style.display = 'none';
+  cancelAnimationFrame(S.raf);
+  const arrancar = () => {
+    video.play().catch(() => {});
+    const bucle = () => {
+      const t = video.currentTime;
+      $('#segFill').style.width = Math.max(0, Math.min(1, (t - S.segT0) / BLOQUE_S)) * 100 + '%';
+      moverCabezal(t);
+      if (t >= S.segT1 - 0.02) {
+        video.pause();
+        $('#segFill').style.width = '100%';
+        $('#fin').style.display = 'block';
+        return;
+      }
+      S.raf = requestAnimationFrame(bucle);
+    };
+    S.raf = requestAnimationFrame(bucle);
+  };
+  video.pause();
+  video.currentTime = S.segT0 + 0.001;
+  video.addEventListener('seeked', arrancar, {once: true});
+}
+
+function moverCabezal(t) {
+  $('#playhead').style.left = (t / S.dur * 100) + '%';
+}
+
+function pausa() {
+  if (video.paused) {
+    if (video.currentTime >= S.segT1 - 0.05) { reproducir(); return; }
+    video.play().catch(() => {});
+    const bucle = () => {
+      const t = video.currentTime;
+      $('#segFill').style.width = Math.max(0, Math.min(1, (t - S.segT0) / BLOQUE_S)) * 100 + '%';
+      moverCabezal(t);
+      if (t >= S.segT1 - 0.02) { video.pause(); $('#fin').style.display = 'block'; return; }
+      if (!video.paused) S.raf = requestAnimationFrame(bucle);
+    };
+    S.raf = requestAnimationFrame(bucle);
+  } else {
+    video.pause();
+    cancelAnimationFrame(S.raf);
+  }
+}
+
+/* ---------------- navegacion ---------------- */
+function irA(k, auto = true) {
+  if (!S.byKey.has(k)) return;
+  const antes = S.cur;
+  S.cur = k;
+  if (antes) pintarBloque(antes);
+  pintarBloque(k);
+  refrescar();
+  ubicarFoco();
+  if (auto) reproducir();
+  guardarLocal();
+}
+
+function mover(d) {
+  const lista = S.queue.includes(S.cur) ? S.queue
+              : S.rows.filter(r => r.esp === S.byKey.get(S.cur).esp).map(r => r.key);
+  const i = lista.indexOf(S.cur) + d;
+  if (i >= 0 && i < lista.length) irA(lista[i]);
+}
+
+/* ---------------- etiquetar ---------------- */
+function etiquetar(clase, fuente) {
+  const r = S.byKey.get(S.cur);
+  if (!r) return;
+  S.labels[r.key] = {clase, prop: r.prop};
+  S.marcas.push(performance.now());
+  if (S.marcas.length > 12) S.marcas.shift();
+  pintarBloque(r.key);
+  golpe(fuente);
+
+  if (clase === '') aviso('? Marcado como dudoso', 'var(--muted)');
+  else if (clase === r.prop) aviso('✓ ' + NOMBRE[clase], COLOR[clase]);
+  else aviso(`✎ ${r.prop ? NOMBRE[r.prop] : '—'} → ${NOMBRE[clase]}`, 'var(--gold)');
+
+  guardarLocal();
+  const sig = siguientePendiente(r.key);
+  refrescar();
+  if (sig) setTimeout(() => irA(sig), 260);
+  else setTimeout(mostrarFinal, 420);
+}
+
+function golpe(el) {
+  if (!el) return;
+  el.classList.remove('hit'); void el.offsetWidth; el.classList.add('hit');
+}
+
+let tAviso = 0;
+function aviso(txt, color) {
+  const t = $('#toast');
+  t.textContent = txt; t.style.color = color; t.style.borderColor = color;
+  t.classList.add('on');
+  clearTimeout(tAviso);
+  tAviso = setTimeout(() => t.classList.remove('on'), 650);
+}
+
+/* ---------------- interfaz ---------------- */
+function contar() {
+  let ok = 0, cambio = 0, duda = 0, hechos = 0;
+  for (const k of S.queue) {
+    const h = S.labels[k];
+    if (!h) continue;
+    hechos++;
+    if (h.clase === '') duda++;
+    else if (h.clase === h.prop) ok++;
+    else cambio++;
+  }
+  return {ok, cambio, duda, hechos, total: S.queue.length};
+}
+
+function refrescar() {
+  const c = contar();
+  $('#progTxt').textContent = `${c.hechos} / ${c.total}`;
+  $('#progFill').style.width = (c.total ? c.hechos / c.total * 100 : 0) + '%';
+  $('#cOk').textContent = c.ok; $('#cCambio').textContent = c.cambio; $('#cDuda').textContent = c.duda;
+
+  // ritmo: media de los ultimos intervalos, ignorando pausas de mas de un minuto
+  const dif = [];
+  for (let i = 1; i < S.marcas.length; i++) {
+    const d = (S.marcas[i] - S.marcas[i - 1]) / 1000;
+    if (d < 60) dif.push(d);
+  }
+  const faltan = c.total - c.hechos;
+  if (dif.length >= 2 && faltan > 0) {
+    const seg = faltan * dif.reduce((a, b) => a + b, 0) / dif.length;
+    $('#cEta').textContent = seg < 60 ? `${Math.ceil(seg)} s` : `${Math.round(seg / 60)} min`;
+  } else $('#cEta').textContent = faltan ? '–' : '0';
+
+  const r = S.byKey.get(S.cur);
+  if (!r) return;
+  const h = S.labels[r.key];
+  $('#info').innerHTML = `Tubo ${r.esp} · Bloque ${r.bloque}<span class="t">${r.t0}–${r.t1} s</span>` +
+    (h ? ` <span class="t">· tú: ${h.clase ? NOMBRE[h.clase] : 'no seguro'}</span>` : '');
+  const pv = $('#propVal');
+  if (r.prop) {
+    pv.innerHTML = `${NOMBRE[r.prop]}<span class="conf">${Number.isFinite(r.conf) ? Math.round(r.conf * 100) + '%' : ''}</span>`;
+    pv.style.color = COLOR[r.prop];
+  } else { pv.textContent = 'sin propuesta'; pv.style.color = 'var(--muted)'; }
+
+  const act = $('#btnActiva');
+  act.disabled = !r.prop;
+  act.style.setProperty('--c', r.prop ? COLOR[r.prop] : 'var(--gold)');
+  $('#activaNom').textContent = r.prop ? NOMBRE[r.prop] : '—';
+  document.querySelectorAll('.cls').forEach(b => b.classList.toggle('sug', b.dataset.c === r.prop));
+  document.querySelectorAll('.tlLabs .l').forEach(l => l.classList.toggle('act', +l.dataset.s === r.esp));
+}
+
+/* ---------------- final ---------------- */
+function mostrarFinal() {
+  const c = contar();
+  $('#fOk').textContent = c.ok; $('#fCambio').textContent = c.cambio; $('#fDuda').textContent = c.duda;
+  const pct = c.hechos - c.duda ? Math.round(100 * c.ok / (c.hechos - c.duda)) : 0;
+  $('#finResumen').textContent =
+    `Revisaste ${c.hechos} bloques. Coincidiste con la máquina en el ${pct}% de los que decidiste.`;
+  const tr = {};
+  for (const k of S.queue) {
+    const h = S.labels[k];
+    if (h && h.clase && h.clase !== h.prop) {
+      const t = `${h.prop ? NOMBRE[h.prop] : 'sin propuesta'} → ${NOMBRE[h.clase]}`;
+      tr[t] = (tr[t] || 0) + 1;
+    }
+  }
+  const filas = Object.entries(tr).sort((a, b) => b[1] - a[1]);
+  $('#tabCambios').innerHTML = filas.length
+    ? '<tr><td colspan="2" style="color:var(--muted);text-align:left;font-weight:400">Dónde se equivocó la máquina</td></tr>' +
+      filas.map(([t, n]) => `<tr><td>${t}</td><td>${n}</td></tr>`).join('')
+    : '';
+  const quedan = S.rows.filter(r => !hecho(r.key) && !S.queue.includes(r.key)).length;
+  $('#btnTodo').hidden = S.mode === 'todos' || !quedan;
+  $('#btnTodo').textContent = `Seguir con el resto del video (${quedan} bloques)`;
+  $('#final').hidden = false;
+}
+
+/* ---------------- exportar ---------------- */
+function construirHoja() {
+  const L = ['bloque,especimen,inicio_s,propuesta,seguridad,clase,confianza,origen'];
+  const orden = [...S.rows].sort((a, b) => a.bloque - b.bloque || a.esp - b.esp);
+  for (const r of orden) {
+    const h = S.labels[r.key];
+    let clase = '', conf = '', origen = 'sin_revisar';
+    if (h) {
+      clase = h.clase;
+      conf = h.clase ? 'alta' : '';
+      origen = !h.clase ? 'humano_duda' : h.clase === r.prop ? 'humano_confirma' : 'humano_corrige';
+    } else if (r.usar === 1 && r.prop) {
+      // los seguros que nadie miro entran con la propuesta, como en la bola de nieve
+      clase = r.prop; conf = 'media'; origen = 'maquina';
+    }
+    L.push([r.bloque, r.esp, r.t0, r.prop,
+            Number.isFinite(r.conf) ? r.conf.toFixed(3) : '', clase, conf, origen].join(','));
+  }
+  return '﻿' + L.join('\r\n') + '\r\n';
+}
+
+async function guardarHoja() {
+  const nombre = `${S.csvVideo}_mano.csv`;
+  const blob = new Blob([construirHoja()], {type: 'text/csv;charset=utf-8'});
+  if (window.showSaveFilePicker) {
+    try {
+      const h = await showSaveFilePicker({suggestedName: nombre,
+        types: [{description: 'Hoja CSV', accept: {'text/csv': ['.csv']}}]});
+      const w = await h.createWritable();
+      await w.write(blob); await w.close();
+      aviso('✓ Guardado', 'var(--nado)');
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+    }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nombre;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  aviso('✓ Descargado · muévelo a etiquetas/', 'var(--nado)');
+}
+
+/* ---------------- inicio ---------------- */
+function marcar(id, estado, txt) {
+  const e = $('#e' + id);
+  e.className = estado; e.textContent = estado === 'ok' ? '●' : estado === 'mal' ? '✕' : '○';
+  $('#t' + id).textContent = txt;
+}
+
+function revisarListo() {
+  const av = [];
+  if (S.csvOk && S.videoOk && S.videoName && S.csvVideo &&
+      S.videoName.toLowerCase() !== S.csvVideo.toLowerCase())
+    av.push(`Ojo: el CSV es de "${S.csvVideo}" y el video es "${S.videoName}". ¿Son el mismo?`);
+  $('#aviso').textContent = av.join(' ');
+  if (S.csvOk) {
+    $('#modos').hidden = false;
+    $('#nDud').textContent = S.rows.filter(r => r.usar === 0).length;
+    $('#nTod').textContent = S.rows.length;
+    const prev = leerLocal();
+    const n = prev ? Object.keys(prev.labels || {}).length : 0;
+    $('#btnEmpezar').textContent = n ? `Continuar (ya llevas ${n})` : 'Empezar';
+  }
+  $('#btnEmpezar').disabled = !(S.csvOk && S.videoOk);
+}
+
+function ponerVideo(src, nombre) {
+  S.videoOk = false;
+  S.videoName = nombre.replace(/\.[^.]+$/, '');
+  marcar('Video', 'no', `Video: ${nombre} · cargando…`);
+  video.src = src;
+  video.onloadedmetadata = () => {
+    S.videoOk = true;
+    const m = Math.floor(video.duration / 60), s = Math.round(video.duration % 60);
+    marcar('Video', 'ok', `Video: ${nombre} · ${video.videoWidth}×${video.videoHeight} · ${m}:${String(s).padStart(2, '0')}`);
+    revisarListo(); ubicarFoco();
+  };
+  video.onerror = () => {
+    S.videoOk = false;
+    marcar('Video', 'mal', `Video: ${nombre} · este navegador no lo puede reproducir. Prueba con Chrome o Edge.`);
+    revisarListo();
+  };
+  $('#nomVideo').textContent = S.videoName;
+}
+
+function ponerCSV(text, nombre) {
+  try {
+    const rows = cargarCSV(text, nombre);
+    S.csvOk = true;
+    const dud = rows.filter(r => r.usar === 0).length;
+    marcar('Csv', 'ok', `Etiquetas: ${nombre} · ${rows.length} bloques, ${S.tubos.length} tubos, ${dud} dudosos`);
+    if (!rows.some(r => r.geo))
+      $('#aviso').textContent = 'Este CSV no trae la posición de los tubos: el video no llevará marco. Vuelve a sacarlo con etiquetar.py para tenerlo.';
+    else if (!rows.some(r => r.geo.real))
+      $('#aviso').textContent = 'Este CSV es de una versión anterior: si la cámara se movió, el marco puede no caer sobre la rata. Fíjate en el número de tubo.';
+  } catch (e) {
+    S.csvOk = false;
+    marcar('Csv', 'mal', `Etiquetas: ${e.message}`);
+  }
+  revisarListo();
+}
+
+function tomarArchivos(files) {
+  for (const f of files) {
+    if (/\.csv$/i.test(f.name)) f.text().then(t => ponerCSV(t, f.name));
+    else ponerVideo(URL.createObjectURL(f), f.name);
+  }
+}
+
+function empezar() {
+  const prev = leerLocal();
+  if (prev && prev.labels) S.labels = prev.labels;
+  armarCola();
+  construirLinea();
+  $('#inicio').hidden = true;
+  const primero = (prev && prev.cur && S.queue.includes(prev.cur) && !hecho(prev.cur)) ? prev.cur
+                : siguientePendiente(S.queue[S.queue.length - 1]) || S.queue[0] || S.rows[0].key;
+  refrescar();
+  irA(primero);
+  if (!siguientePendiente(null) && S.queue.every(hecho)) setTimeout(mostrarFinal, 500);
+}
+
+/* ---------------- eventos ---------------- */
+// Tras un clic, el boton pierde el foco. Si no, al pulsar Espacio para pausar
+// el navegador volveria a "pulsar" el ultimo boton y etiquetaria dos veces.
+document.addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (b) setTimeout(() => b.blur(), 0);
+}, true);
+document.querySelectorAll('.cls').forEach(b => b.addEventListener('click', () => etiquetar(b.dataset.c, b)));
+$('#btnRepetir').addEventListener('click', e => { golpe(e.currentTarget); reproducir(); });
+$('#btnActiva').addEventListener('click', e => {
+  const r = S.byKey.get(S.cur);
+  if (r && r.prop) etiquetar(r.prop, e.currentTarget);
+});
+$('#btnGuardar').addEventListener('click', guardarHoja);
+$('#btnGuardarFin').addEventListener('click', guardarHoja);
+$('#btnCerrar').addEventListener('click', () => { $('#final').hidden = true; });
+$('#btnTodo').addEventListener('click', () => {
+  S.mode = 'todos'; armarCola();
+  for (const r of S.rows) pintarBloque(r.key);
+  $('#final').hidden = true;
+  const sig = siguientePendiente(S.cur);
+  refrescar(); guardarLocal();
+  if (sig) irA(sig);
+});
+
+document.querySelectorAll('.modo').forEach(b => b.addEventListener('click', () => {
+  S.mode = b.dataset.m;
+  document.querySelectorAll('.modo').forEach(x => x.classList.toggle('sel', x === b));
+}));
+$('#btnEmpezar').addEventListener('click', empezar);
+$('#pickVideo').addEventListener('click', () => $('#inVideo').click());
+$('#pickCsv').addEventListener('click', () => $('#inCsv').click());
+$('#inVideo').addEventListener('change', e => tomarArchivos(e.target.files));
+$('#inCsv').addEventListener('change', e => tomarArchivos(e.target.files));
+const drop = $('#drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => tomarArchivos(e.dataTransfer.files));
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => { e.preventDefault(); if (!$('#inicio').hidden) tomarArchivos(e.dataTransfer.files); });
+
+window.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (S.csvOk) guardarHoja(); return; }
+  if (!$('#inicio').hidden) { if (e.key === 'Enter' && !$('#btnEmpezar').disabled) empezar(); return; }
+  if (!$('#final').hidden) { if (e.key === 'Escape') $('#final').hidden = true; return; }
+  if (e.repeat) return;
+  const k = e.key;
+  if (k === '1' || k === '2' || k === '3') {
+    const c = CLASES[+k - 1];
+    etiquetar(c, document.querySelector(`.cls[data-c=${c}]`));
+  } else if (k === '0') etiquetar('', null);
+  else if (k === 'Enter') { e.preventDefault(); $('#btnActiva').click(); }
+  else if (k === 'r' || k === 'R') $('#btnRepetir').click();
+  else if (k === ' ') { e.preventDefault(); pausa(); }
+  else if (k === 'ArrowRight') mover(1);
+  else if (k === 'ArrowLeft') mover(-1);
+});
+window.addEventListener('resize', ubicarFoco);
+
+/* Carga directa por direccion (?video=...&csv=...), util si se sirve la
+   carpeta con un servidor local. Con doble clic se usa la pantalla de inicio. */
+(async () => {
+  const p = new URLSearchParams(location.search);
+  if (p.get('video')) ponerVideo(p.get('video'), p.get('video').split('/').pop());
+  if (p.get('csv')) {
+    try { ponerCSV(await (await fetch(p.get('csv'), {cache: 'no-store'})).text(), p.get('csv').split('/').pop()); }
+    catch (e) { marcar('Csv', 'mal', 'Etiquetas: no se pudo leer ' + p.get('csv')); }
+  }
+})();
+</script>
+</body>
+</html>

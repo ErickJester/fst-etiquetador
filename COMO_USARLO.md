@@ -74,11 +74,31 @@ Cada CSV trae dos columnas extra:
 
 ### Paso 4 — bola de nieve
 
-No etiquetes a mano el video entero. Abre el CSV, filtra por `usar = 0`, y
-revisa **nada más esos bloques**. Son como uno de cada cinco.
+No etiquetes a mano el video entero. Revisa **nada más los bloques donde la
+máquina dudó**, que son como uno de cada cinco.
 
-Corriges esos, los guardas como `video2_mano.csv`, y vuelves al Paso 2 con los
-dos videos:
+Para eso está **`revisor.html`**. Ábrelo con doble clic (Chrome o Edge) y
+arrastra encima el video y su `_rasgos.csv`. Es como un juego:
+
+- El video ocupa casi toda la pantalla, con el tubo a mirar iluminado
+- Debajo, la línea de tiempo de cada tubo, como en un editor de video
+- Debajo, cinco botones:
+
+| Botón | Tecla | Qué hace |
+|---|---|---|
+| Inmovilidad | `1` | Esa es la conducta |
+| Nado | `2` | Esa es la conducta |
+| Escalamiento | `3` | Esa es la conducta |
+| Repetir | `R` | Vuelve a ver esos 5 segundos |
+| Conducta activa | `Enter` | La máquina tenía razón, acepta su propuesta |
+
+Si no lo ves claro ni repitiendo, pulsa `0`: el bloque queda como dudoso y no
+entra al entrenamiento. Clic en cualquier bloque de la línea de tiempo para
+volver a él. El progreso se guarda solo en el navegador; si cierras, al volver
+te ofrece continuar.
+
+Al terminar, "Guardar la hoja" te propone el nombre `video2_mano.csv`.
+Guárdalo en `etiquetas/` y vuelve al Paso 2 con los dos videos:
 
 ```bash
 py entrenar.py --carpeta etiquetas --etiquetas mano

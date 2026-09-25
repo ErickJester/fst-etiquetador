@@ -48,6 +48,11 @@ def cargar(pares, usar_dudosas):
         cols = ['bloque', 'especimen', 'clase']
         if 'confianza' in e.columns:
             cols.append('confianza')
+        # Si los rasgos se sacaron con --modelo, traen la propuesta de la
+        # maquina en 'clase', 'confianza' y 'usar'. Hay que tirarlas antes de
+        # cruzar: si no, pandas renombra a clase_x / clase_y y la etiqueta
+        # humana desaparece. La verdad es la hoja manual, nunca la propuesta.
+        r = r.drop(columns=[c for c in ('clase', 'confianza', 'usar') if c in r.columns])
         j = r.merge(e[cols], on=['bloque', 'especimen'], how='inner')
         if 'video' not in j.columns:
             j['video'] = os.path.splitext(os.path.basename(rr))[0]
@@ -61,7 +66,9 @@ def cargar(pares, usar_dudosas):
     # Una casilla de clase vacia significa "ni viendolo lo tengo claro". Es una
     # respuesta valida del revisor y se descarta: vale mas una etiqueta menos
     # que una inventada.
-    d['clase'] = d['clase'].astype(str).str.strip().str.lower()
+    # fillna antes de astype: con pandas 3.0 astype(str) conserva los vacios
+    # como nulos en vez de convertirlos en el texto 'nan', y se colarian.
+    d['clase'] = d['clase'].fillna('').astype(str).str.strip().str.lower()
     vacias = d['clase'].isin(('', 'nan', 'none'))
     if vacias.any():
         print('  %d bloques sin decidir, se descartan' % int(vacias.sum()))

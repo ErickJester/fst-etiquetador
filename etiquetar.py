@@ -55,6 +55,7 @@ def una(ruta, args, log=print):
     log('  5/5 agregando en bloques de 5 s')
     bl = lib.bloques(filas, g, fps, log=log)
 
+    bl = lib.cajas_crudas(bl, lut, g, fps)
     bl.insert(0, 'video', nombre)
     # Queda anotado porque tres rasgos (path, rng, spanx) dependen de cada
     # cuantos fotogramas se mide, y mezclar pasos degrada el clasificador sin

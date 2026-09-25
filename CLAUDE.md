@@ -33,6 +33,7 @@ El detalle está en `COMO_USARLO.md`.
 | Archivo | Qué es |
 |---|---|
 | `comprobar.py` | Diagnóstico del entorno. Lo primero que se corre en una máquina nueva |
+| `revisor.html` | Revisión humana en el navegador. Lee `*_rasgos.csv` + video, escribe `*_mano.csv`. Sustituye a `revisar.py` |
 | `lib.py` | Registro, fondo, geometría automática, extracción, rasgos |
 | `etiquetar.py` | Video → CSV de rasgos (+ etiquetas si se da `--modelo`) |
 | `entrenar.py` | CSVs etiquetados → `modelo_fst.joblib` |
@@ -144,3 +145,23 @@ Rasgos que siguen dependiendo: `path` 2.06, `rng` 1.29, `spanx` 1.23, `nq` 1.11.
 Se podrian arreglar remuestreando la trayectoria a una rejilla temporal fija
 antes de medirla. No se hizo porque paso 12 ya es el mejor y el candado impide
 mezclar.
+
+## revisor.html: lo que hay que saber antes de tocarlo
+
+- Todo el analisis vive en el marco ESTABILIZADO (`gx0`, `gx1`, `g_agua`,
+  `g_fondo`). El video que ve el usuario es el crudo. Para dibujar sobre el hay
+  que usar `bx0..by1`, que `lib.cajas_crudas` calcula deshaciendo el registro
+  en la mitad de cada bloque. En `IMG_0840` la camara se desplaza hasta 574 px
+  en vertical: con `gx*` el marco cae fuera de la rata.
+- El oscurecido alrededor del tubo son cuatro divs. Un box-shadow u outline de
+  9999 px deja de pintarse en Chrome mientras el `<video>` se reproduce.
+- La hoja que guarda trae `origen`: `humano_confirma`, `humano_corrige`,
+  `humano_duda` (casilla vacia) o `maquina` (bloque seguro que nadie miro).
+- `entrenar.py` tira `clase/confianza/usar` de los rasgos antes de cruzar. Si
+  no, pandas renombra a `clase_x/clase_y` y la etiqueta humana se pierde.
+- Con pandas 3.0, `astype(str)` conserva los vacios como nulos. Hay que hacer
+  `fillna('')` antes, o el "no se" del revisor rompe el entrenamiento.
+
+Pendiente conocido: al validar por video, las filas `maquina` del video de
+prueba son predicciones del propio modelo y inflan la nota. La cifra honesta
+es la calculada solo sobre filas `humano_*`.
