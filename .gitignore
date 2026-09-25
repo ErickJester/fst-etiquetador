@@ -6,8 +6,6 @@ videos_sin_etiquetar/*
 *.mp4
 *.avi
 
-# Imagenes de control: se regeneran solas y se acumulan una por video.
-etiquetas/*_control.jpg
 
 # Registros de ejecucion
 *.log
