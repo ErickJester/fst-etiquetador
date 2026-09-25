@@ -61,15 +61,65 @@ def medfilt1(x, k=5):
     return np.median(np.stack([xp[i:i + len(x)] for i in range(k)]), axis=0)
 
 
+# --------------------------- rotacion ---------------------------
+#
+# Todo el analisis supone cilindros DE PIE: superficie del agua horizontal y
+# tubos uno junto a otro. Si la camara grabo girada, cada fotograma se endereza
+# al leerlo y el resto del codigo no se entera. ROT lo fija etiquetar.py con
+# --rotar antes de procesar; vale 0, 90 (horario), 180 o 270 (antihorario).
+ROT = 0
+_GIRO = {90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180,
+         270: cv2.ROTATE_90_COUNTERCLOCKWISE}
+
+
+class _Video:
+    """cv2.VideoCapture que devuelve los fotogramas ya enderezados."""
+
+    def __init__(self, ruta):
+        self.cap = cv2.VideoCapture(ruta)
+        self.rot = ROT
+
+    def read(self):
+        ok, fr = self.cap.read()
+        if ok and self.rot:
+            fr = cv2.rotate(fr, _GIRO[self.rot])
+        return ok, fr
+
+    def __getattr__(self, nombre):          # set, get, release, isOpened...
+        return getattr(self.cap, nombre)
+
+
+def abrir(ruta):
+    return _Video(ruta)
+
+
+def sin_girar(pts, W, H, rot=None):
+    """Lleva puntos del fotograma enderezado (W x H) al video tal como esta
+    guardado, que es como lo muestra el navegador."""
+    rot = ROT if rot is None else rot
+    x, y = pts[:, 0], pts[:, 1]
+    if rot == 90:      # se giro a la derecha: el original medía H de ancho
+        return np.stack([y, W - 1 - x], axis=1)
+    if rot == 270:     # se giro a la izquierda
+        return np.stack([H - 1 - y, x], axis=1)
+    if rot == 180:
+        return np.stack([W - 1 - x, H - 1 - y], axis=1)
+    return pts
+
+
 def info_video(ruta):
-    cap = cv2.VideoCapture(ruta)
+    cap = abrir(ruta)
     if not cap.isOpened():
         raise IOError('no se pudo abrir: %s' % ruta)
     fps = cap.get(cv2.CAP_PROP_FPS)
     n   = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    w   = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    h   = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    # El tamano se toma de un fotograma real y no de las propiedades: asi
+    # refleja la rotacion aplicada y la que el propio archivo trae declarada.
+    ok, fr = cap.read()
     cap.release()
+    if not ok:
+        raise IOError('no se pudo leer ningun fotograma de %s' % ruta)
+    h, w = fr.shape[:2]
     if not (1 < fps < 200):
         raise ValueError('fps ilegible (%r); pasa --fps a mano' % fps)
     return fps, n, w, h
@@ -87,7 +137,7 @@ def registrar(ruta, paso=2, ref_frac=0.5, log=print):
     # Un archivo truncado o mal copiado declara mas fotogramas de los que
     # tiene. Se prueban varias posiciones antes de rendirse, empezando por la
     # pedida y retrocediendo hacia el principio.
-    cap = cv2.VideoCapture(ruta)
+    cap = abrir(ruta)
     fr = None
     for frac in [ref_frac, 0.35, 0.2, 0.1, 0.02]:
         cap.set(cv2.CAP_PROP_POS_FRAMES, int(n * frac))
@@ -144,7 +194,7 @@ def registrar(ruta, paso=2, ref_frac=0.5, log=print):
 
 def _alineados(ruta, lut, WH, cada):
     W, H = WH
-    cap = cv2.VideoCapture(ruta)
+    cap = abrir(ruta)
     cur = -1
     while True:
         ok, fr = cap.read()
@@ -312,7 +362,7 @@ def dibujar_geometria(ruta, lut, WH, g, destino):
     sobre el agua y el suelo, la deteccion fallo y no sirve seguir."""
     W, H = WH
     i = sorted(lut)[len(lut) // 2]
-    cap = cv2.VideoCapture(ruta)
+    cap = abrir(ruta)
     cap.set(cv2.CAP_PROP_POS_FRAMES, i)
     ok, fr = cap.read()
     cap.release()
@@ -345,7 +395,7 @@ def extraer(ruta, lut, WH, fondo, g, fps, log=print):
     # cambia el coste de calculo pero no los valores.
     from collections import deque
     filas, hist = [], {}
-    cap = cv2.VideoCapture(ruta)
+    cap = abrir(ruta)
     cur = -1
     while True:
         ok, fr = cap.read()
@@ -426,7 +476,7 @@ def extraer(ruta, lut, WH, fondo, g, fps, log=print):
     return filas
 
 
-def cajas_crudas(bl, lut, g, fps):
+def cajas_crudas(bl, lut, g, fps, WH=None):
     """Anade bx0, by0, bx1, by1: el recuadro de cada tubo en coordenadas del
     video TAL COMO SE VE, en el instante medio de cada bloque.
 
@@ -448,6 +498,10 @@ def cajas_crudas(bl, lut, g, fps):
         x0, x1 = g['tubos'][int(s)]
         esq = np.array([[x0, arriba], [x1, arriba], [x0, abajo], [x1, abajo]], np.float64)
         q = esq @ inv[:, :2].T + inv[:, 2]
+        if ROT:
+            # y ademas deshacer el enderezado: el navegador muestra el video
+            # tal como esta guardado, girado
+            q = sin_girar(q, WH[0], WH[1])
         cajas.append((int(q[:, 0].min()), int(q[:, 1].min()),
                       int(q[:, 0].max()), int(q[:, 1].max())))
     bl = bl.copy()

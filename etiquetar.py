@@ -14,6 +14,10 @@ Opciones:
                         que mejor resultado dio y con el que se entreno el modelo
     --umbral U          confianza minima para dar por buena la etiqueta (0.80)
     --salida DIR        carpeta de resultados (por defecto ./etiquetas)
+    --rotar R           endereza un video grabado con la camara girada:
+                        izquierda, derecha o 180. Elige hacia donde hay que
+                        girar la imagen para que los cilindros queden de pie.
+                        Si el video sale en vertical, el programa lo avisa.
 
 Por cada video deja:
     <nombre>_rasgos.csv        un renglon por bloque de 5 s y por especimen
@@ -100,7 +104,15 @@ def una(ruta, args, paq, log=print):
     log('=' * 66)
 
     fps, n, W, H = lib.info_video(ruta)
-    log('  %dx%d  %.2f fps  %d fotogramas  %.1f s' % (W, H, fps, n, n / fps))
+    log('  %dx%d  %.2f fps  %d fotogramas  %.1f s%s'
+        % (W, H, fps, n, n / fps, '   (enderezado %d grados)' % lib.ROT if lib.ROT else ''))
+    if H > W:
+        # El aparato es mas ancho que alto: un fotograma vertical casi siempre
+        # es una camara girada. No se corrige solo porque la direccion del
+        # giro no se puede adivinar con seguridad.
+        log('  AVISO: el video queda en vertical. Si en la imagen de control los\n'
+            '  cilindros salen acostados, repitelo con --rotar=izquierda o\n'
+            '  --rotar=derecha (hacia donde haya que girarlo para enderezarlo).')
 
     log('  1/5 alineando la camara')
     lut, WH, fps = lib.registrar(ruta, paso=args.paso, log=log)
@@ -118,8 +130,9 @@ def una(ruta, args, paq, log=print):
     log('  5/5 agregando en bloques de 5 s')
     bl = lib.bloques(filas, g, fps, log=log)
 
-    bl = lib.cajas_crudas(bl, lut, g, fps)
+    bl = lib.cajas_crudas(bl, lut, g, fps, WH)
     bl.insert(0, 'video', nombre)
+    bl.insert(2, 'rotar', lib.ROT)
     # Queda anotado porque tres rasgos (path, rng, spanx) dependen de cada
     # cuantos fotogramas se mide, y mezclar pasos degrada el clasificador sin
     # dar ningun error. Medido en IMG_0826: paso 12 acierta 0.880 y paso 2
@@ -166,8 +179,16 @@ def main():
     p.add_argument('--paso', type=int, default=12)
     p.add_argument('--umbral', type=float, default=0.80)
     p.add_argument('--salida', default='etiquetas')
+    p.add_argument('--rotar', default='0',
+                   help='endereza un video grabado girado: derecha, izquierda o 180')
     args = p.parse_args()
     os.makedirs(args.salida, exist_ok=True)
+
+    giros = {'0': 0, 'no': 0, 'derecha': 90, '90': 90, '180': 180,
+             'izquierda': 270, '270': 270, '-90': 270}
+    if args.rotar.lower() not in giros:
+        raise SystemExit('--rotar acepta: derecha, izquierda o 180 (recibi %r)' % args.rotar)
+    lib.ROT = giros[args.rotar.lower()]
 
     # Se comprueba ANTES de tocar ningun video: procesar uno cuesta diez
     # minutos y no tiene sentido gastarlos para fallar al final.
