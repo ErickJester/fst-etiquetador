@@ -165,3 +165,28 @@ mezclar.
 Pendiente conocido: al validar por video, las filas `maquina` del video de
 prueba son predicciones del propio modelo y inflan la nota. La cifra honesta
 es la calculada solo sobre filas `humano_*`.
+
+## Conducta activa
+
+Cuarta etiqueta valida: `activa` = no inmovil, sin decidir entre nado y
+escalamiento. Es el nivel de Porsolt (inmovil / no inmovil); Detke separo
+despues lo activo en nado y escalamiento. OJO: el usuario la describio una vez
+como "nado e inmovilidad"; se implemento como nado + escalamiento porque es lo
+unico coherente con Porsolt, y se le aviso.
+
+- `etiquetar.py` propone `activa` cuando ninguna conducta pasa el umbral pero
+  p_nado + p_escalamiento si. En IMG_0840 bajo los dudosos de 23 a 7.
+  Guarda tambien `p_inmovilidad`, `p_nado`, `p_escalamiento`.
+- `etiquetar.py` acepta un `_rasgos.csv` en lugar de un video para volver a
+  proponer con otro modelo sin reprocesar (segundos, no diez minutos).
+- `entrenar.py` saca las filas `activa` del modelo de tres conductas y las usa
+  en una segunda medida, inmovil contra activa, validada igual por grupos.
+- El `--paso` por defecto de `etiquetar.py` es 12 (antes 2, que contradecia
+  lo medido y chocaba con el candado del modelo).
+
+`revisor.html`: teclas 1 nado, 2 inmovilidad, 3 escalamiento, 4 activa. Enter
+ya no hace nada durante la revision. Una flecha = bloque de al lado; dos
+flechas en menos de 400 ms = siguiente dudoso contando desde donde estabas.
+Modo "desde cero" oculta todo rastro de la maquina (cartel, colores de la linea
+de tiempo, contadores) y guarda su progreso aparte; sus filas salen con
+`origen = humano_ciego` y los bloques sin mirar quedan en blanco.

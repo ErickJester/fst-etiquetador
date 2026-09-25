@@ -1,11 +1,17 @@
 """Etiquetador automatico de FST. Un video entra, un CSV etiquetado sale.
 
-    py etiquetar.py video1.MOV video2.MOV ...
+    py etiquetar.py video1.MOV video2.MOV ... --modelo=modelo_fst.joblib --tubos=4
+
+Tambien acepta CSV de rasgos ya sacados, para volver a proponer etiquetas con
+un modelo nuevo sin reprocesar el video (segundos en vez de diez minutos):
+
+    py etiquetar.py etiquetas/IMG_0840_rasgos.csv --modelo=modelo_fst.joblib
 
 Opciones:
     --modelo M.joblib   clasificador entrenado; sin el, solo saca rasgos
-    --tubos N           cuantos cilindros esperar (recomendado: ponlo siempre)
-    --paso N            analizar 1 de cada N fotogramas (2 = ~15/s, por defecto)
+    --tubos N           cuantos cilindros CON RATA hay (recomendado: ponlo siempre)
+    --paso N            analizar 1 de cada N fotogramas. 12 por defecto: es el
+                        que mejor resultado dio y con el que se entreno el modelo
     --umbral U          confianza minima para dar por buena la etiqueta (0.80)
     --salida DIR        carpeta de resultados (por defecto ./etiquetas)
 
@@ -14,9 +20,17 @@ Por cada video deja:
     <nombre>_control.jpg       MIRALA. Si las lineas no caen sobre el agua y
                                el suelo del tubo, ese video no sirve.
 
-La columna 'usar' vale 1 solo si el clasificador decidio con confianza
-suficiente. Para entrenar, quedate nada mas con las filas usar=1: menos
-etiquetas pero mas limpias sale mejor que muchas etiquetas dudosas.
+Conducta activa. En el diseño de Porsolt solo se distingue inmovil de no
+inmovil; Detke separo despues lo activo en nado y escalamiento. Cuando el
+modelo sabe que la rata NO esta inmovil pero duda entre nadar y trepar, la
+propuesta es 'activa': una etiqueta mas gruesa pero fiable. Asi:
+
+    1. si una conducta pasa el umbral               -> esa conducta
+    2. si no, pero nado + escalamiento lo pasan     -> activa
+    3. si ninguna de las dos cosas                  -> dudoso (usar = 0)
+
+La columna 'usar' vale 1 en los casos 1 y 2. Las probabilidades de cada
+conducta quedan en p_inmovilidad, p_nado y p_escalamiento.
 """
 import os
 import sys
@@ -28,8 +42,57 @@ import numpy as np
 import pandas as pd
 import lib
 
+ACTIVAS = ('nado', 'escalamiento')
 
-def una(ruta, args, log=print):
+
+def proponer(bl, paq, umbral, log=print):
+    """Rellena clase, confianza, usar y p_* con la regla de tres pasos."""
+    mod, feats = paq['modelo'], paq['caracteristicas']
+    falta = [c for c in feats if c not in bl.columns]
+    if falta:
+        raise SystemExit('el modelo pide columnas que no existen: %s' % falta)
+    bl = bl.drop(columns=[c for c in bl.columns
+                          if c in ('clase', 'confianza', 'usar') or c.startswith('p_')])
+    X = bl[feats].to_numpy(float)
+    val = ~np.isnan(X).any(1)
+    clases = list(mod.classes_)
+    P = np.full((len(bl), len(clases)), np.nan)
+    if val.any():
+        P[val] = mod.predict_proba(X[val])
+    for j, c in enumerate(clases):
+        bl['p_' + c] = P[:, j].round(3)
+
+    mejor = np.where(val, np.nanargmax(np.where(val[:, None], P, 0), axis=1), -1)
+    conf_mejor = np.where(val, np.nanmax(np.where(val[:, None], P, 0), axis=1), np.nan)
+    activa = sum(P[:, clases.index(c)] for c in ACTIVAS if c in clases)
+
+    clase, conf, usar = [], [], []
+    for i in range(len(bl)):
+        if not val[i]:
+            clase.append(''); conf.append(np.nan); usar.append(0)
+        elif conf_mejor[i] >= umbral:
+            clase.append(clases[mejor[i]]); conf.append(conf_mejor[i]); usar.append(1)
+        elif activa[i] >= umbral:
+            clase.append('activa'); conf.append(activa[i]); usar.append(1)
+        else:
+            clase.append(clases[mejor[i]]); conf.append(conf_mejor[i]); usar.append(0)
+    bl['clase'] = clase
+    bl['confianza'] = np.round(conf, 3)
+    bl['usar'] = usar
+
+    u = bl[bl.usar == 1]
+    log('\n  reparto de conductas (solo las filas usar=1):')
+    for c, k in u['clase'].value_counts().items():
+        log('    %-14s %3d bloques  (%4.0f s)' % (c, k, k * lib.BLOCK_S))
+    n_act = int((bl.clase == 'activa').sum())
+    if n_act:
+        log('  de esos, %d son "activa": no inmovil, sin decidir si nada o trepa' % n_act)
+    log('  aprovechables: %d de %d bloques (%.0f%%)   dudosos: %d'
+        % (len(u), len(bl), 100 * len(u) / max(len(bl), 1), len(bl) - len(u)))
+    return bl
+
+
+def una(ruta, args, paq, log=print):
     nombre = os.path.splitext(os.path.basename(ruta))[0]
     t0 = time.time()
     log('\n%s' % ('=' * 66))
@@ -66,29 +129,8 @@ def una(ruta, args, log=print):
     if perdidos:
         log('  AVISO: %d bloques sin animal visible (quedan sin rasgos)' % perdidos)
 
-    if args.modelo:
-        import joblib
-        paq = joblib.load(args.modelo)
-        mod, feats = paq['modelo'], paq['caracteristicas']
-        falta = [c for c in feats if c not in bl.columns]
-        if falta:
-            raise SystemExit('el modelo pide columnas que no existen: %s' % falta)
-        X = bl[feats].to_numpy(float)
-        val = ~np.isnan(X).any(1)
-        bl['clase'] = ''
-        bl['confianza'] = np.nan
-        if val.any():
-            P = mod.predict_proba(X[val])
-            bl.loc[val, 'clase'] = mod.classes_[P.argmax(1)]
-            bl.loc[val, 'confianza'] = P.max(1).round(3)
-        bl['usar'] = ((bl['confianza'] >= args.umbral) & val).astype(int)
-        log('\n  reparto de conductas (solo las filas usar=1):')
-        u = bl[bl.usar == 1]
-        if len(u):
-            for c, k in u['clase'].value_counts().items():
-                log('    %-14s %3d bloques  (%4.0f s)' % (c, k, k * lib.BLOCK_S))
-        log('  aprovechables: %d de %d bloques (%.0f%%)'
-            % (len(u), len(bl), 100 * len(u) / max(len(bl), 1)))
+    if paq:
+        bl = proponer(bl, paq, args.umbral, log=log)
     else:
         log('\n  sin --modelo: solo se sacaron los rasgos, sin etiquetar')
 
@@ -98,13 +140,30 @@ def una(ruta, args, log=print):
     return dest
 
 
+def reproponer(ruta, args, paq, log=print):
+    """Vuelve a proponer sobre un _rasgos.csv ya existente."""
+    log('\n%s\n%s   (solo propuestas, sin reprocesar el video)\n%s'
+        % ('=' * 66, os.path.basename(ruta), '=' * 66))
+    if not paq:
+        raise SystemExit('para volver a proponer sobre un CSV hace falta --modelo')
+    bl = pd.read_csv(ruta, encoding='utf-8-sig')
+    paso_csv = int(bl['paso'].iloc[0]) if 'paso' in bl.columns else None
+    if paq.get('paso') and paso_csv and paso_csv != paq['paso']:
+        raise SystemExit('%s se extrajo con --paso=%d y el modelo es de --paso=%d. '
+                         'No son comparables.' % (ruta, paso_csv, paq['paso']))
+    bl = proponer(bl, paq, args.umbral, log=log)
+    bl.to_csv(ruta, index=False, encoding='utf-8-sig')
+    log('  -> %s' % ruta)
+    return ruta
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('videos', nargs='+')
+    p.add_argument('videos', nargs='+', help='videos, o _rasgos.csv ya sacados')
     p.add_argument('--modelo', default=None)
     p.add_argument('--tubos', type=int, default=None)
-    p.add_argument('--paso', type=int, default=2)
+    p.add_argument('--paso', type=int, default=12)
     p.add_argument('--umbral', type=float, default=0.80)
     p.add_argument('--salida', default='etiquetas')
     args = p.parse_args()
@@ -112,10 +171,13 @@ def main():
 
     # Se comprueba ANTES de tocar ningun video: procesar uno cuesta diez
     # minutos y no tiene sentido gastarlos para fallar al final.
+    paq = None
     if args.modelo:
         import joblib
-        paso_mod = joblib.load(args.modelo).get('paso')
-        if paso_mod and paso_mod != args.paso:
+        paq = joblib.load(args.modelo)
+        paso_mod = paq.get('paso')
+        hay_videos = any(not v.lower().endswith('.csv') for v in args.videos)
+        if hay_videos and paso_mod and paso_mod != args.paso:
             raise SystemExit(
                 'Este modelo se entreno con --paso=%d y pediste --paso=%d.\n'
                 'Los rasgos path, rng y spanx cambian con el paso, asi que las\n'
@@ -125,7 +187,12 @@ def main():
     hechos, rotos = [], []
     for v in args.videos:
         try:
-            hechos.append(una(v, args))
+            if v.lower().endswith('.csv'):
+                hechos.append(reproponer(v, args, paq))
+            else:
+                hechos.append(una(v, args, paq))
+        except SystemExit:
+            raise
         except Exception as e:
             rotos.append((v, str(e)))
             print('  FALLO en %s: %s' % (v, e))
@@ -134,9 +201,10 @@ def main():
     print('listos: %d   fallidos: %d' % (len(hechos), len(rotos)))
     for v, e in rotos:
         print('  %s -> %s' % (os.path.basename(v), e))
-    print('\nAHORA: abre todos los *_control.jpg y descarta los videos donde las')
-    print('lineas no esten sobre el agua y el suelo. Eso toma 5 s por video y')
-    print('es lo unico que evita meter basura al entrenamiento.')
+    if any(not v.lower().endswith('.csv') for v in args.videos):
+        print('\nAHORA: abre todos los *_control.jpg y descarta los videos donde las')
+        print('lineas no esten sobre el agua y el suelo. Eso toma 5 s por video y')
+        print('es lo unico que evita meter basura al entrenamiento.')
 
 
 if __name__ == '__main__':

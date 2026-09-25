@@ -86,16 +86,35 @@ arrastra encima el video y su `_rasgos.csv`. Es como un juego:
 
 | Botón | Tecla | Qué hace |
 |---|---|---|
-| Inmovilidad | `1` | Esa es la conducta |
-| Nado | `2` | Esa es la conducta |
+| Nado | `1` | Esa es la conducta |
+| Inmovilidad | `2` | Esa es la conducta |
 | Escalamiento | `3` | Esa es la conducta |
 | Repetir | `R` | Vuelve a ver esos 5 segundos |
-| Conducta activa | `Enter` | La máquina tenía razón, acepta su propuesta |
+| Conducta activa | `4` | Se mueve, pero no sabes si nada o trepa |
+
+**Conducta activa** es el nivel de Porsolt: no inmóvil, o sea nado más
+escalamiento. Úsala cuando está claro que la rata no está quieta pero no
+distingues si nada o trepa. Es una respuesta válida, no un "no sé".
 
 Si no lo ves claro ni repitiendo, pulsa `0`: el bloque queda como dudoso y no
-entra al entrenamiento. Clic en cualquier bloque de la línea de tiempo para
-volver a él. El progreso se guarda solo en el navegador; si cierras, al volver
+entra al entrenamiento.
+
+Para moverte: una flecha `→` va al bloque de al lado; dos flechas rápidas
+`→→` saltan al siguiente dudoso. Clic en cualquier bloque de la línea de tiempo
+para ir a él. El progreso se guarda solo en el navegador; si cierras, al volver
 te ofrece continuar.
+
+Al empezar eliges entre tres modos:
+
+| Modo | Qué revisas |
+|---|---|
+| Solo donde la máquina dudó | Los bloques dudosos, viendo su propuesta |
+| Todo el video | Todos, viendo su propuesta |
+| Desde cero | Todos, **sin ver** lo que dice la máquina |
+
+"Desde cero" es el que da la comparación honesta entre tú y la máquina: al
+final te dice en qué porcentaje coincidiste sin que ella te influyera. Lleva su
+propio progreso, separado de los otros dos.
 
 Al terminar, "Guardar la hoja" te propone el nombre `video2_mano.csv`.
 Guárdalo en `etiquetas/` y vuelve al Paso 2 con los dos videos:

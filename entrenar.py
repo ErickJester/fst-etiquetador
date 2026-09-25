@@ -73,10 +73,10 @@ def cargar(pares, usar_dudosas):
     if vacias.any():
         print('  %d bloques sin decidir, se descartan' % int(vacias.sum()))
         d = d[~vacias]
-    malas = ~d['clase'].isin(('inmovilidad', 'nado', 'escalamiento'))
+    malas = ~d['clase'].isin(('inmovilidad', 'nado', 'escalamiento', 'activa'))
     if malas.any():
         raise SystemExit('hay clases mal escritas: %s\nSolo valen inmovilidad, '
-                         'nado y escalamiento.' % sorted(set(d.loc[malas, 'clase'])))
+                         'nado, escalamiento y activa.' % sorted(set(d.loc[malas, 'clase'])))
     d = d.dropna(subset=lib.RASGOS)
     return d
 
@@ -109,10 +109,17 @@ def main():
         raise SystemExit('no hay nada que entrenar')
 
     print('cargando:')
-    d = cargar(pares, args.usar_dudosas)
+    todo = cargar(pares, args.usar_dudosas)
+    # 'activa' = no inmovil, sin decidir si nada o trepa. No sirve para el
+    # modelo de tres conductas, pero si para el nivel de Porsolt (inmovil /
+    # activa), que se evalua aparte mas abajo con TODAS las filas.
+    d = todo[todo['clase'] != 'activa'].reset_index(drop=True)
+    n_act = len(todo) - len(d)
     print('\n%d bloques utiles, %d videos, %d clases'
           % (len(d), d['video'].nunique(), d['clase'].nunique()))
     print(d['clase'].value_counts().to_string())
+    if n_act:
+        print('activa (fuera del modelo de 3 conductas): %d' % n_act)
     if len(d) < 60:
         print('\nAVISO: con menos de 60 bloques el numero de validacion no dice nada.')
 
@@ -150,6 +157,25 @@ def main():
     print('  ' + ' ' * 14 + ''.join('%12s' % c[:10] for c in clases))
     for i, c in enumerate(clases):
         print('  %-14s' % c + ''.join('%12d' % v for v in cm[i]))
+
+    # Nivel Porsolt: inmovil contra activa (nado + escalamiento). Es la medida
+    # principal del test y aqui si cuentan las filas que el revisor marco como
+    # 'activa'. Cada pliegue entrena solo con videos ajenos al que se evalua.
+    gt = (todo['video'].to_numpy() if como == 'video' else
+          ('v' + todo['video'].astype(str) + '_a' + todo['especimen'].astype(str)).to_numpy())
+    Xt = todo[lib.RASGOS].to_numpy(float)
+    yt = np.where(todo['clase'].to_numpy() == 'inmovilidad', 'inmovil', 'activa')
+    pt = np.empty(len(todo), dtype=object)
+    for tr, te in GroupKFold(n_splits=min(pd.unique(gt).size, 5)).split(Xt, yt, gt):
+        tr = tr[todo['clase'].to_numpy()[tr] != 'activa']
+        m = HistGradientBoostingClassifier(max_iter=300, learning_rate=0.06,
+                                           max_leaf_nodes=15, l2_regularization=1.0,
+                                           random_state=0).fit(Xt[tr], todo['clase'].to_numpy()[tr])
+        pt[te] = np.where(m.predict(Xt[te]) == 'inmovilidad', 'inmovil', 'activa')
+    print('\n  nivel Porsolt, inmovil contra activa (%d bloques, incluye los "activa"):'
+          % len(todo))
+    print('  exactitud                   : %.3f' % accuracy_score(yt, pt))
+    print('  kappa                       : %+.3f' % cohen_kappa_score(yt, pt))
 
     # con que confianza acierta: define el umbral de --umbral en etiquetar.py
     P = cross_val_predict(clf, X, y, groups=grupos, cv=GroupKFold(n_splits=k),
