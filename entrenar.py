@@ -58,6 +58,18 @@ def cargar(pares, usar_dudosas):
               % (os.path.basename(rr), n0, len(j)))
         trozos.append(j)
     d = pd.concat(trozos, ignore_index=True)
+    # Una casilla de clase vacia significa "ni viendolo lo tengo claro". Es una
+    # respuesta valida del revisor y se descarta: vale mas una etiqueta menos
+    # que una inventada.
+    d['clase'] = d['clase'].astype(str).str.strip().str.lower()
+    vacias = d['clase'].isin(('', 'nan', 'none'))
+    if vacias.any():
+        print('  %d bloques sin decidir, se descartan' % int(vacias.sum()))
+        d = d[~vacias]
+    malas = ~d['clase'].isin(('inmovilidad', 'nado', 'escalamiento'))
+    if malas.any():
+        raise SystemExit('hay clases mal escritas: %s\nSolo valen inmovilidad, '
+                         'nado y escalamiento.' % sorted(set(d.loc[malas, 'clase'])))
     d = d.dropna(subset=lib.RASGOS)
     return d
 

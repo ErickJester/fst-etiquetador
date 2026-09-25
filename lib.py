@@ -456,7 +456,11 @@ def bloques(filas, g, fps, escala=None, log=print):
         n_ok = int(ok.sum())
         r = dict(bloque=int(b), especimen=int(s),
                  t0=round((b - 1) * BLOCK_S, 2), t1=round(b * BLOCK_S, 2),
-                 n=len(d), n_visto=n_ok, escala_px=round(escala, 1))
+                 n=len(d), n_visto=n_ok, escala_px=round(escala, 1),
+                 # Geometria detectada. Se guarda para que revisar.py pueda
+                 # recortar y marcar el tubo sin reprocesar el video entero.
+                 gx0=int(g['tubos'][s][0]), gx1=int(g['tubos'][s][1]),
+                 g_agua=int(ya), g_fondo=int(yf))
         if n_ok >= 5:
             xs, ys = medfilt1(cx[ok], 5), medfilt1(cy[ok], 5)
             dur = max(float(d['t'].iloc[-1] - d['t'].iloc[0]), 1e-3)

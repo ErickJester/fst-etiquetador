@@ -19,3 +19,6 @@ __pycache__/
 
 # Los CSV de etiquetas.py SI se versionan: son el conjunto de datos y
 # regenerarlos cuesta 10 minutos por video.
+
+# Videitos de revision: se regeneran con revisar.py y pesan decenas de MB.
+revision/
