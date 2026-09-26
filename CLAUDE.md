@@ -213,3 +213,9 @@ conjunto de datos; la CNN es el clasificador final y se compara contra el.
 - Entrada 'movimiento' (postura normalizada + desviacion temporal + cambio
   entre fotogramas): en local, 3 videos, 8 epocas, kappa +0.24 -> +0.41 e
   inmovilidad 0.06 -> 0.58 frente a 'trios' en el mismo experimento.
+- Colab, 14 videos: 'movimiento' kappa +0.574 (8 fotogramas) y +0.580 (16).
+  Muestrear mas denso no ayudo.
+- Version 4 (`VERSION` se imprime al cargar, para saber que Colab lee la
+  copia nueva de Drive): ENTRADA 'video3d', R(2+1)D-18 de torchvision
+  preentrenada en Kinetics-400, 16 fotogramas, 15 epocas, lote 16, lr 1e-4.
+  Cada clip normalizado por su propio brillo. En CPU ~1 s por clip y epoca.

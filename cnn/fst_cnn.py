@@ -17,6 +17,12 @@ fotogramas del bloque (ENTRADA = 'movimiento', la de por defecto):
 El fondo quieto sale casi a cero en los canales 2 y 3, asi que la red no puede
 apoyarse en como se ve cada video. La version anterior (ENTRADA = 'trios', 3
 fotogramas crudos) aprendia los fondos: kappa +0.43 validando por video.
+
+ENTRADA = 'video3d' (version 4, la de por defecto) cambia de red: una
+R(2+1)D-18 preentrenada con Kinetics-400, videos de acciones humanas. Es una
+CNN 3D: recibe los 16 fotogramas del bloque como video y aprende el movimiento
+ella misma, en vez de recibirlo resumido en 3 imagenes. Cada clip se
+normaliza por su propio brillo para que no dependa de la luz de cada video.
 """
 import os
 import glob
@@ -35,12 +41,20 @@ from sklearn.metrics import cohen_kappa_score, confusion_matrix
 # validar, para confirmar que Colab esta usando la copia nueva de Drive.
 #   1  3 fotogramas crudos, 12 epocas
 #   2  40 epocas, peso de clases con raiz
-#   3  mapas de movimiento
-VERSION = 3
+#   3  mapas de movimiento (kappa +0.574 con 8 fotogramas, +0.580 con 16)
+#   4  CNN 3D R(2+1)D-18 preentrenada en Kinetics
+VERSION = 4
 
 CLASES = ['escalamiento', 'inmovilidad', 'nado']
 MEDIA, DESV = 0.45, 0.225
-ENTRADA = 'movimiento'   # o 'trios'
+ENTRADA = 'video3d'      # 'video3d', 'movimiento' o 'trios'
+# lo que cambia por tipo de red: la 3D pesa mucho mas por clip
+AJUSTES = {
+    'video3d':    dict(epocas=15, lote=16, lr=1e-4, lote_pred=32),
+    'movimiento': dict(epocas=40, lote=64, lr=3e-4, lote_pred=256),
+    'trios':      dict(epocas=40, lote=64, lr=3e-4, lote_pred=256),
+}
+K_MEDIA, K_DESV = 0.43, 0.226     # normalizacion de Kinetics, en gris
 MOV = 0.08                # escala tipica del movimiento de la rata (0-1)
 
 
@@ -86,6 +100,8 @@ class Clips(Dataset):
         y = -1 if self.y is None else int(self.y[i])
         if ENTRADA == 'movimiento':
             return self._movimiento(c), y
+        if ENTRADA == 'video3d':
+            return self._video(c), y
         T = c.shape[0]
         if self.entrenar:
             g = np.random.randint(1, (T - 1) // 2 + 1)
@@ -116,8 +132,18 @@ class Clips(Dataset):
         pataleo = (f[1:] - f[:-1]).abs().mean(0) / MOV - 1
         return torch.stack([postura, desplaz.clamp(-1, 6), pataleo.clamp(-1, 6)])
 
+    def _video(self, c):
+        f = self._aumentar(torch.from_numpy(c.astype(np.float32) / 255.0))
+        f = (f - f.mean()) / (f.std() + 0.05) * K_DESV     # brillo propio del clip
+        return f.unsqueeze(0).expand(3, -1, -1, -1).contiguous()   # (3, T, H, W)
+
 
 def red(preentrenada=True):
+    if ENTRADA == 'video3d':
+        from torchvision.models.video import r2plus1d_18, R2Plus1D_18_Weights
+        m = r2plus1d_18(weights=R2Plus1D_18_Weights.KINETICS400_V1 if preentrenada else None)
+        m.fc = nn.Linear(m.fc.in_features, len(CLASES))
+        return m
     from torchvision.models import resnet18, ResNet18_Weights
     m = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1 if preentrenada else None)
     m.fc = nn.Linear(m.fc.in_features, len(CLASES))
@@ -128,7 +154,9 @@ def dispositivo():
     return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def entrenar(X, y, epocas=40, lote=64, lr=3e-4, log=print):
+def entrenar(X, y, epocas=None, lote=None, lr=None, log=print):
+    aj = AJUSTES[ENTRADA]
+    epocas, lote, lr = epocas or aj['epocas'], lote or aj['lote'], lr or aj['lr']
     dev = dispositivo()
     m = red().to(dev)
     # nado es 4-5 veces escalamiento. Compensarlo del todo (peso 1/frecuencia)
@@ -163,7 +191,8 @@ def entrenar(X, y, epocas=40, lote=64, lr=3e-4, log=print):
 
 
 @torch.no_grad()
-def predecir(m, X, lote=256):
+def predecir(m, X, lote=None):
+    lote = lote or AJUSTES[ENTRADA]['lote_pred']
     dev = dispositivo()
     m.eval()
     P = np.zeros((len(X), len(CLASES)))
@@ -178,7 +207,7 @@ def predecir(m, X, lote=256):
     return P / len(ts)
 
 
-def validar(carpeta, partes=5, epocas=40, usar_dudosas=False):
+def validar(carpeta, partes=5, epocas=None, usar_dudosas=False):
     """Validacion cruzada POR VIDEO: cada video se predice con una red que
     nunca lo vio. Imprime lo mismo que entrenar.py para poder compararlos."""
     X, clase, video = cargar(carpeta, usar_dudosas)
@@ -225,7 +254,7 @@ def validar(carpeta, partes=5, epocas=40, usar_dudosas=False):
     return P, clase, video
 
 
-def final(carpeta, destino, epocas=40, usar_dudosas=False):
+def final(carpeta, destino, epocas=None, usar_dudosas=False):
     """Entrena con TODOS los clips y guarda la red."""
     X, clase, video = cargar(carpeta, usar_dudosas)
     tres = np.isin(clase, CLASES)
@@ -246,12 +275,16 @@ def main():
     p.add_argument('--validar', action='store_true')
     p.add_argument('--final', action='store_true')
     p.add_argument('--destino', default='fst_cnn.pt')
-    p.add_argument('--epocas', type=int, default=40)
+    p.add_argument('--epocas', type=int, default=None,
+                   help='por defecto 15 para video3d y 40 para las otras')
     p.add_argument('--partes', type=int, default=5)
     p.add_argument('--usar-dudosas', action='store_true')
+    p.add_argument('--entrada', default=None, choices=sorted(AJUSTES))
     a = p.parse_args()
     if not (a.validar or a.final):
         p.error('pide --validar, --final o los dos')
+    global ENTRADA
+    ENTRADA = a.entrada or ENTRADA
     if a.validar:
         validar(a.clips, a.partes, a.epocas, a.usar_dudosas)
     if a.final:
