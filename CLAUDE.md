@@ -190,3 +190,20 @@ flechas en menos de 400 ms = siguiente dudoso contando desde donde estabas.
 Modo "desde cero" oculta todo rastro de la maquina (cartel, colores de la linea
 de tiempo, contadores) y guarda su progreso aparte; sus filas salen con
 `origen = humano_ciego` y los bloques sin mirar quedan en blanco.
+
+## CNN (carpeta cnn/)
+
+La tesis pide una CNN. El etiquetador (Random Forest sobre rasgos) fabrico el
+conjunto de datos; la CNN es el clasificador final y se compara contra el.
+
+- `cnn/recortar.py` corre donde estan los videos (CPU, ~1 min por video). Por
+  cada bloque de `*_mano.csv` recorta el tubo con `bx0..by1` del `_rasgos.csv`,
+  8 fotogramas repartidos en los 5 s, gris 128x96, enderezado segun `rotar`.
+  Deja `clips/X.npz` + `X_muestra.jpg` para revisar a ojo.
+- `cnn/fst_cnn.py`: ResNet18 preentrenada; los 3 canales son 3 fotogramas del
+  bloque (asi ve movimiento). Trio al azar al entrenar, promedio de trios fijos
+  al predecir. Validacion GroupKFold por video, misma salida que entrenar.py.
+- `cnn/fst_cnn.ipynb`: cuaderno de Colab. Clona el repo de GitHub y lee los
+  clips de `MyDrive/fst/clips`. Por eso el codigo tiene que estar subido.
+- Probado en local (CPU) con 3 videos, 8 epocas: kappa +0.24. Solo prueba que
+  el circuito funciona; con 2 videos de entrenamiento por ronda no dice nada.
