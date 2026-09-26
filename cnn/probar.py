@@ -41,7 +41,8 @@ ACTIVAS = ('nado', 'escalamiento')
 def cargar_red(ruta):
     paq = torch.load(ruta, map_location='cpu', weights_only=False)
     fst_cnn.ENTRADA = paq.get('entrada', 'trios')
-    m = fst_cnn.red(preentrenada=False)
+    med = paq.get('medidas')
+    m = fst_cnn.red(preentrenada=False, n_med=len(med) if med else None)
     m.load_state_dict(paq['pesos'])
     m.eval()
     print('red %s: version %s, entrada %s, %d fotogramas, entrenada con %d clips'
@@ -77,7 +78,10 @@ def comparar(d, mano_csv, vistos):
         print('  para medirla de verdad usa un video que no este en la lista.')
     # la CNN puede proponer 'activa'; para las 3 conductas se usa su mejor clase
     mejor = d.set_index(['bloque', 'especimen'])[['p_' + c for c in fst_cnn.CLASES]]
-    mejor = mejor.idxmax(axis=1).str[2:]
+    # los bloques que no se pudieron recortar no tienen prediccion
+    mejor = mejor.dropna().idxmax(axis=1).str[2:]
+    tres = tres[tres.set_index(['bloque', 'especimen']).index.isin(mejor.index)]
+    j = j.dropna(subset=['p_inmovilidad'])
     pred = tres.set_index(['bloque', 'especimen']).index.map(mejor)
     print('  exactitud (3 conductas) : %.3f   (%d bloques)' % ((pred == tres['clase']).mean(), len(tres)))
     print('  kappa                   : %+.3f' % cohen_kappa_score(tres['clase'], pred))
@@ -114,7 +118,12 @@ def main():
     P = np.full((len(d), len(fst_cnn.CLASES)), np.nan)
     if completos.any():
         with torch.no_grad():
-            P[completos] = fst_cnn.predecir(m, X[completos])
+            M = None
+            if fst_cnn.ENTRADA == 'fusion':
+                # mismas medidas que al entrenar: rasgos del CSV + reglas del clip
+                R = d.loc[completos, fst_cnn.RASGOS].to_numpy(np.float32)
+                M = np.hstack([R, fst_cnn.reglas(X[completos])])
+            P[completos] = fst_cnn.predecir(m, X[completos], M=M)
 
     d = d.drop(columns=[c for c in d.columns
                         if c in ('clase', 'confianza', 'usar') or c.startswith('p_')])

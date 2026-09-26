@@ -13,7 +13,14 @@ endereza si el video se proceso con --rotar y lo reduce a gris de 128x96.
 Deja en clips/ un X.npz por video. Esa carpeta es lo que se sube a Google
 Drive para el cuaderno fst_cnn.ipynb.
 
+Tambien deja clips/rasgos.csv: los 15 rasgos del etiquetador de cada clip,
+que la CNN version 5 usa junto con el video. Si ya tienes los clips y solo
+falta ese archivo (no relee ningun video, tarda segundos):
+
+    py cnn/recortar.py --solo-rasgos
+
 Opciones:
+    --solo-rasgos           solo escribe clips/rasgos.csv a partir de los .npz
     --videos DIR [DIR ...]  carpetas donde buscar los videos (se puede repetir)
     --etiquetas DIR         carpeta con los CSV (por defecto etiquetas)
     --salida DIR            carpeta de clips (por defecto clips)
@@ -28,6 +35,9 @@ import argparse
 import cv2
 import numpy as np
 import pandas as pd
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from lib import RASGOS
 
 ALTO, ANCHO = 128, 96
 EXT = ('.mov', '.mp4', '.avi', '.mkv', '.MOV', '.MP4', '.AVI', '.MKV')
@@ -105,6 +115,28 @@ def recortar(ruta, d, n_frames):
     return X, visto
 
 
+def escribir_rasgos(salida, etiquetas):
+    """clips/rasgos.csv: los rasgos del etiquetador de cada clip guardado,
+    cruzados por (video, especimen, bloque). Es lo unico que hay que subir a
+    Drive para pasar de la version 4 a la 5."""
+    trozos = []
+    for f in sorted(glob.glob(os.path.join(salida, '*.npz'))):
+        z = np.load(f)
+        n = str(z['video'])
+        r = pd.read_csv(os.path.join(etiquetas, n + '_rasgos.csv'), encoding='utf-8-sig')
+        c = pd.DataFrame(dict(especimen=z['especimen'], bloque=z['bloque']))
+        c = c.merge(r[['especimen', 'bloque'] + RASGOS], on=['especimen', 'bloque'], how='left')
+        c.insert(0, 'video', n)
+        trozos.append(c)
+    if not trozos:
+        print('no hay clips en %s' % salida)
+        return
+    d = pd.concat(trozos, ignore_index=True)
+    dest = os.path.join(salida, 'rasgos.csv')
+    d.to_csv(dest, index=False, encoding='utf-8')
+    print('rasgos de %d clips de %d videos -> %s' % (len(d), d['video'].nunique(), dest))
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -112,7 +144,11 @@ def main():
     p.add_argument('--etiquetas', default='etiquetas')
     p.add_argument('--salida', default='clips')
     p.add_argument('--frames', type=int, default=8)
+    p.add_argument('--solo-rasgos', action='store_true')
     a = p.parse_args()
+    if a.solo_rasgos:
+        escribir_rasgos(a.salida, a.etiquetas)
+        return
     if not a.videos:
         a.videos = ['videos_sin_etiquetar']
     os.makedirs(a.salida, exist_ok=True)
@@ -152,6 +188,7 @@ def main():
         hechos += 1
 
     print('\nlistos: %d de %d videos' % (hechos, len(nombres)))
+    escribir_rasgos(a.salida, a.etiquetas)
     if faltan:
         print('sin video: %s' % ', '.join(faltan))
         print('Pasa la carpeta donde esten con --videos, por ejemplo:')

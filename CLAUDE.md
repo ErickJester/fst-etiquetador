@@ -224,3 +224,15 @@ conjunto de datos; la CNN es el clasificador final y se compara contra el.
   GPU (~2-4 min por video) y deja `X_cnn.csv` para abrir en revisor.html. Si
   hay `X_mano.csv` compara y avisa si el video estaba en el entrenamiento.
   Ojo: revisor guarda como `X_mano.csv` y pisaria el existente.
+- F1 de v4 (calculado de su matriz): escalamiento 0.62, inmovilidad 0.77,
+  nado 0.85; a nivel RN-13 inmovilidad 0.77, activa 0.93. La tesis (cap. 4,
+  RNF-02) exige F1 >= 0.85 POR CONDUCTA; RN-13 permite juntar nado y
+  escalamiento, pero inmovilidad tiene que pasar igual. Es el cuello de botella.
+- Version 5 (`ENTRADA = 'fusion'`): CNN 3D + rama de 22 medidas (15 rasgos de
+  `clips/rasgos.csv` + 7 reglas del observador medidas en el clip: pataleo
+  trasero/delantero bajo el agua y cambio en la franja sobre la linea de agua).
+  Implementa la "heuristica de movimiento + aspect ratio" del cap. 5 de la
+  tesis. `validar` imprime F1 por conducta y al nivel RN-13 contra 0.85.
+  En local (3 videos): tras_media separa inmovilidad con AUC 0.90; las
+  medidas de "abrupto" no separan (~0.5) con 8 fotogramas.
+- `recortar.py --solo-rasgos` escribe `clips/rasgos.csv` sin releer videos.
