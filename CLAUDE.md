@@ -219,3 +219,8 @@ conjunto de datos; la CNN es el clasificador final y se compara contra el.
   copia nueva de Drive): ENTRADA 'video3d', R(2+1)D-18 de torchvision
   preentrenada en Kinetics-400, 16 fotogramas, 15 epocas, lote 16, lr 1e-4.
   Cada clip normalizado por su propio brillo. En CPU ~1 s por clip y epoca.
+- Colab v4: kappa +0.625, Porsolt 0.896 (kappa +0.703). La mejor hasta ahora.
+- `cnn/probar.py X_rasgos.csv --red fst_cnn.pt`: aplica la red en la PC sin
+  GPU (~2-4 min por video) y deja `X_cnn.csv` para abrir en revisor.html. Si
+  hay `X_mano.csv` compara y avisa si el video estaba en el entrenamiento.
+  Ojo: revisor guarda como `X_mano.csv` y pisaria el existente.
