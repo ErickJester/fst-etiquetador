@@ -203,7 +203,7 @@ conjunto de datos; la CNN es el clasificador final y se compara contra el.
 - `cnn/fst_cnn.py`: ResNet18 preentrenada; los 3 canales son 3 fotogramas del
   bloque (asi ve movimiento). Trio al azar al entrenar, promedio de trios fijos
   al predecir. Validacion GroupKFold por video, misma salida que entrenar.py.
-- `cnn/fst_cnn.ipynb`: cuaderno de Colab. Clona el repo de GitHub y lee los
-  clips de `MyDrive/fst/clips`. Por eso el codigo tiene que estar subido.
+- `cnn/fst_cnn.ipynb`: cuaderno de Colab. El repo es PRIVADO: no se clona;
+  lee `MyDrive/fst/fst_cnn.py` y `MyDrive/fst/clips` desde Drive.
 - Probado en local (CPU) con 3 videos, 8 epocas: kappa +0.24. Solo prueba que
   el circuito funciona; con 2 videos de entrenamiento por ronda no dice nada.
