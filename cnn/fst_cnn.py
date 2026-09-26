@@ -7,12 +7,16 @@ local, lento y sin GPU, para probar que todo cuadra:
     py cnn/fst_cnn.py clips --final --destino fst_cnn.pt
 
 La idea: una ResNet18 preentrenada en ImageNet ve una sola imagen de 3 canales.
-En vez de rojo, verde y azul se le meten 3 fotogramas del mismo bloque
-separados en el tiempo. Asi la red ve movimiento, que es justo lo que separa
-nado de inmovilidad, sin necesitar una red 3D que con 3000 clips sobreajusta.
+En vez de rojo, verde y azul se le meten 3 imagenes hechas con los 8
+fotogramas del bloque (ENTRADA = 'movimiento', la de por defecto):
 
-Al entrenar los 3 fotogramas se eligen al azar dentro del bloque (aumenta los
-datos); al predecir se promedian varios trios fijos.
+    1. un fotograma del medio con la luz normalizada: la postura
+    2. desviacion de cada pixel a lo largo de los 5 s: cuanto se desplazo
+    3. cambio medio entre fotogramas seguidos: el pataleo
+
+El fondo quieto sale casi a cero en los canales 2 y 3, asi que la red no puede
+apoyarse en como se ve cada video. La version anterior (ENTRADA = 'trios', 3
+fotogramas crudos) aprendia los fondos: kappa +0.43 validando por video.
 """
 import os
 import glob
@@ -29,6 +33,8 @@ from sklearn.metrics import cohen_kappa_score, confusion_matrix
 
 CLASES = ['escalamiento', 'inmovilidad', 'nado']
 MEDIA, DESV = 0.45, 0.225
+ENTRADA = 'movimiento'   # o 'trios'
+MOV = 0.08                # escala tipica del movimiento de la rata (0-1)
 
 
 def cargar(carpeta, usar_dudosas=False):
@@ -67,6 +73,9 @@ class Clips(Dataset):
 
     def __getitem__(self, i):
         c = self.X[i]
+        y = -1 if self.y is None else int(self.y[i])
+        if ENTRADA == 'movimiento':
+            return self._movimiento(c), y
         T = c.shape[0]
         if self.entrenar:
             g = np.random.randint(1, (T - 1) // 2 + 1)
@@ -74,7 +83,10 @@ class Clips(Dataset):
             idx = (s, s + g, s + 2 * g)
         else:
             idx = self.trio
-        x = torch.from_numpy(c[list(idx)].astype(np.float32) / 255.0)
+        x = self._aumentar(torch.from_numpy(c[list(idx)].astype(np.float32) / 255.0))
+        return (x - MEDIA) / DESV, y
+
+    def _aumentar(self, x):
         if self.entrenar:
             # los videos cambian de luz y de encuadre: que la red no se apoye
             # en el brillo ni en la posicion exacta
@@ -84,9 +96,15 @@ class Clips(Dataset):
             dy, dx = np.random.randint(-6, 7, 2)
             x = torch.roll(x, (int(dy), int(dx)), (1, 2))
             x = x.clamp(0, 1)
-        x = (x - MEDIA) / DESV
-        y = -1 if self.y is None else int(self.y[i])
-        return x, y
+        return x
+
+    def _movimiento(self, c):
+        f = self._aumentar(torch.from_numpy(c.astype(np.float32) / 255.0))
+        medio = f[f.shape[0] // 2]
+        postura = (medio - medio.mean()) / (medio.std() + 0.05)
+        desplaz = f.std(0) / MOV - 1
+        pataleo = (f[1:] - f[:-1]).abs().mean(0) / MOV - 1
+        return torch.stack([postura, desplaz.clamp(-1, 6), pataleo.clamp(-1, 6)])
 
 
 def red(preentrenada=True):
@@ -139,7 +157,7 @@ def predecir(m, X, lote=256):
     dev = dispositivo()
     m.eval()
     P = np.zeros((len(X), len(CLASES)))
-    ts = trios(X.shape[1])
+    ts = trios(X.shape[1]) if ENTRADA == 'trios' else [None]
     for tr in ts:
         dl = DataLoader(Clips(X, trio=tr), batch_size=lote)
         out = []

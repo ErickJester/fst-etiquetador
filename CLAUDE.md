@@ -207,3 +207,9 @@ conjunto de datos; la CNN es el clasificador final y se compara contra el.
   lee `MyDrive/fst/fst_cnn.py` y `MyDrive/fst/clips` desde Drive.
 - Probado en local (CPU) con 3 videos, 8 epocas: kappa +0.24. Solo prueba que
   el circuito funciona; con 2 videos de entrenamiento por ronda no dice nada.
+- Colab, 14 videos, validando por video: entrada 'trios' (3 fotogramas crudos)
+  kappa +0.476 a 12 epocas y +0.430 a 40. No era falta de entrenamiento: la
+  red aprendia el fondo de cada video.
+- Entrada 'movimiento' (postura normalizada + desviacion temporal + cambio
+  entre fotogramas): en local, 3 videos, 8 epocas, kappa +0.24 -> +0.41 e
+  inmovilidad 0.06 -> 0.58 frente a 'trios' en el mismo experimento.
