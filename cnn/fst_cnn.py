@@ -100,12 +100,15 @@ def dispositivo():
     return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def entrenar(X, y, epocas=12, lote=64, lr=3e-4, log=print):
+def entrenar(X, y, epocas=40, lote=64, lr=3e-4, log=print):
     dev = dispositivo()
     m = red().to(dev)
-    # la clase mas comun (nado) triplica a escalamiento: se compensa
+    # nado es 4-5 veces escalamiento. Compensarlo del todo (peso 1/frecuencia)
+    # hizo que viera escalamiento en 418 bloques de nado; con la raiz se
+    # compensa a medias
     frec = np.bincount(y, minlength=len(CLASES)).astype(float)
-    peso = torch.tensor(frec.sum() / (len(CLASES) * np.maximum(frec, 1)), dtype=torch.float32)
+    peso = np.sqrt(frec.sum() / (len(CLASES) * np.maximum(frec, 1)))
+    peso = torch.tensor(peso / peso.mean(), dtype=torch.float32)
     crit = nn.CrossEntropyLoss(weight=peso.to(dev), label_smoothing=0.05)
     opt = torch.optim.AdamW(m.parameters(), lr=lr, weight_decay=1e-4)
     dl = DataLoader(Clips(X, y, entrenar=True), batch_size=lote, shuffle=True,
@@ -147,7 +150,7 @@ def predecir(m, X, lote=256):
     return P / len(ts)
 
 
-def validar(carpeta, partes=5, epocas=12, usar_dudosas=False):
+def validar(carpeta, partes=5, epocas=40, usar_dudosas=False):
     """Validacion cruzada POR VIDEO: cada video se predice con una red que
     nunca lo vio. Imprime lo mismo que entrenar.py para poder compararlos."""
     X, clase, video = cargar(carpeta, usar_dudosas)
@@ -193,7 +196,7 @@ def validar(carpeta, partes=5, epocas=12, usar_dudosas=False):
     return P, clase, video
 
 
-def final(carpeta, destino, epocas=12, usar_dudosas=False):
+def final(carpeta, destino, epocas=40, usar_dudosas=False):
     """Entrena con TODOS los clips y guarda la red."""
     X, clase, video = cargar(carpeta, usar_dudosas)
     tres = np.isin(clase, CLASES)
@@ -213,7 +216,7 @@ def main():
     p.add_argument('--validar', action='store_true')
     p.add_argument('--final', action='store_true')
     p.add_argument('--destino', default='fst_cnn.pt')
-    p.add_argument('--epocas', type=int, default=12)
+    p.add_argument('--epocas', type=int, default=40)
     p.add_argument('--partes', type=int, default=5)
     p.add_argument('--usar-dudosas', action='store_true')
     a = p.parse_args()
