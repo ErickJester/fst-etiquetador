@@ -31,10 +31,20 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import GroupKFold
 from sklearn.metrics import cohen_kappa_score, confusion_matrix
 
+# Sube este numero con cada cambio. Se imprime al cargar el modulo y al
+# validar, para confirmar que Colab esta usando la copia nueva de Drive.
+#   1  3 fotogramas crudos, 12 epocas
+#   2  40 epocas, peso de clases con raiz
+#   3  mapas de movimiento
+VERSION = 3
+
 CLASES = ['escalamiento', 'inmovilidad', 'nado']
 MEDIA, DESV = 0.45, 0.225
 ENTRADA = 'movimiento'   # o 'trios'
 MOV = 0.08                # escala tipica del movimiento de la rata (0-1)
+
+
+print('fst_cnn version %d cargada' % VERSION)
 
 
 def cargar(carpeta, usar_dudosas=False):
@@ -176,7 +186,8 @@ def validar(carpeta, partes=5, epocas=40, usar_dudosas=False):
     y = np.array([CLASES.index(c) if c in CLASES else -1 for c in clase])
     P = np.full((len(X), len(CLASES)), np.nan)
     gk = GroupKFold(n_splits=min(partes, len(set(video))))
-    print('\nvalidando por video, en %d partes (%s)' % (gk.n_splits, dispositivo()))
+    print('\nfst_cnn version %d, entrada %s' % (VERSION, ENTRADA))
+    print('validando por video, en %d partes (%s)' % (gk.n_splits, dispositivo()))
     for k, (tr, te) in enumerate(gk.split(X, y, video)):
         tr = tr[tres[tr]]
         print('  parte %d: prueba con %s' % (k + 1, ', '.join(sorted(set(video[te])))))
@@ -219,11 +230,12 @@ def final(carpeta, destino, epocas=40, usar_dudosas=False):
     X, clase, video = cargar(carpeta, usar_dudosas)
     tres = np.isin(clase, CLASES)
     y = np.array([CLASES.index(c) for c in clase[tres]])
-    print('\nentrenando la red final con %d clips (%s)' % (tres.sum(), dispositivo()))
+    print('\nfst_cnn version %d, entrada %s' % (VERSION, ENTRADA))
+    print('entrenando la red final con %d clips (%s)' % (tres.sum(), dispositivo()))
     m = entrenar(X[tres], y, epocas=epocas)
     torch.save(dict(pesos=m.state_dict(), clases=CLASES, frames=X.shape[1],
                     alto=X.shape[2], ancho=X.shape[3], videos=sorted(set(video)),
-                    n_clips=int(tres.sum())), destino)
+                    n_clips=int(tres.sum()), version=VERSION, entrada=ENTRADA), destino)
     print('red -> %s' % destino)
 
 
