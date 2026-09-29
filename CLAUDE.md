@@ -236,3 +236,31 @@ conjunto de datos; la CNN es el clasificador final y se compara contra el.
   En local (3 videos): tras_media separa inmovilidad con AUC 0.90; las
   medidas de "abrupto" no separan (~0.5) con 8 fotogramas.
 - `recortar.py --solo-rasgos` escribe `clips/rasgos.csv` sin releer videos.
+
+## Conteo por segundo (pedido del laboratorio, 2026-09-29)
+
+El doctor quiere contabilizar TODAS las conductas en todo momento, en
+segundos, no la conducta dominante de cada bloque de 5 s (Porsolt). Sin
+duracion minima de episodio: el "minimo 3 s" del cap. 4 de la tesis ya no
+aplica. "Conducta activa" sigue valiendo como plan B (RN-13).
+Plan en 4 fases: (1) revisor por segundo, (2) etiquetar.py por segundo con
+ventana de ~3 s y guardando las medidas por fotograma, (3) CNN por segundo
+sobre la secuencia completa de cada rata, (4) reporte por rata en segundos,
+total y por minuto.
+
+Fase 1 hecha: `revisor_segundos.html` (archivo aparte para no romper el
+revisor por bloques).
+- Entradas, se reconocen por columnas: `_rasgos/_cnn.csv` (cajas `bx*`,
+  obligatorio), `_mano.csv` (prellenado con tus bloques), `_seg.csv` (hoja
+  propia para seguir, o propuesta de la maquina por segundo en la fase 2).
+- Fuentes del prellenado: hoja propia, maquina por segundo, tus bloques,
+  maquina por bloque, desde cero. Se propone la mejor disponible mientras el
+  usuario no elija.
+- Semantica de teclas: reproduciendo, cambia desde (t - 0.4 s de reaccion)
+  hasta el siguiente cambio de color; pausado, solo el segundo actual.
+  Ctrl+Z deshace. Tab cambia de tubo.
+- "Visto" = segundos que el cabezal ya dejo atras a velocidad <= 2x. Solo lo
+  visto sale como `humano_*`; lo pintado hacia adelante sin verlo sale como
+  `sin_revisar`. Desde cero sale `humano_ciego`.
+- Hoja: `<video>_seg.csv` con especimen, segundo (1..N), inicio_s, tiempo,
+  clase, origen, propuesta. N = floor(duracion del video).

@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Revisor por segundo</title>
+<!--
+  Revisor segundo a segundo del test de nado forzado.
+
+  Abre este archivo con doble clic (Chrome o Edge) y arrastra a la vez:
+    - el video
+    - su _rasgos.csv (o _cnn.csv): trae donde esta cada tubo
+    - opcional: su _mano.csv (tus bloques de 5 s), para empezar con ellos
+    - opcional: un _seg.csv, para seguir una hoja por segundo ya guardada
+
+  Se revisa una rata a la vez, con el video corriendo. Cada segundo empieza con
+  una propuesta. Cuando lo que ves no coincide con el cartel "Ahora", pulsa la
+  conducta correcta: cambia desde ese segundo hasta el siguiente cambio de color.
+
+  Teclas:  1 nado  2 inmovilidad  3 escalamiento  4 conducta activa  0 no se ve
+           Espacio pausa   <- -> un segundo   Shift+<- -> cinco segundos
+           R vuelve 3 s    Tab siguiente tubo   Ctrl+Z deshacer   Ctrl+S guardar
+
+  Pausado, una tecla cambia SOLO el segundo donde estas: sirve para corregir
+  con precision. Reproduciendo, cambia hasta el siguiente cambio de color.
+
+  Guarda <video>_seg.csv: una fila por rata y por segundo.
+-->
+<style>
+:root{
+  --bg:#0d1117; --panel:#151b23; --panel2:#1c242e; --line:#2b3440;
+  --text:#e6edf3; --muted:#8b98a6;
+  --inm:#4c8dff; --nado:#2fd27c; --esc:#ff7a45; --act:#b18cff; --gold:#f5c542; --none:#3a4350;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.35}
+[hidden]{display:none!important}
+
+#app{display:grid;grid-template-rows:auto 1fr auto auto;height:100vh}
+
+#top{display:flex;align-items:center;gap:16px;padding:10px 18px;background:var(--panel);
+  border-bottom:1px solid var(--line);min-height:52px;flex-wrap:wrap}
+#top .titulo{font-weight:700;white-space:nowrap}
+#top .titulo small{color:var(--muted);font-weight:500;margin-left:8px}
+#tubos{display:flex;gap:6px}
+#tubos button{padding:5px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);
+  font-weight:650;font-variant-numeric:tabular-nums}
+#tubos button.sel{border-color:var(--gold);color:var(--gold)}
+#tubos button small{color:var(--muted);font-weight:500;margin-left:5px}
+#prog{flex:1;display:flex;align-items:center;gap:10px;min-width:160px;max-width:360px}
+#progBar{flex:1;height:10px;border-radius:99px;background:var(--panel2);overflow:hidden}
+#progFill{height:100%;width:0;background:linear-gradient(90deg,var(--gold),#ffdd7a);border-radius:99px;
+  transition:width .3s}
+#progTxt{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+#totales{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+.chip{padding:4px 10px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);
+  color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.chip b{color:var(--text)}
+.chip i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:0}
+.btnTop{padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel2)}
+.btnTop:hover{border-color:var(--gold);color:var(--gold)}
+
+#stage{position:relative;overflow:hidden;background:#000;min-height:0}
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+#spot{position:absolute;border:3px solid var(--gold);border-radius:6px;pointer-events:none;display:none}
+.velo{position:absolute;background:rgba(0,0,0,.58);pointer-events:none;display:none}
+#spot span{position:absolute;top:-30px;left:-3px;background:var(--gold);color:#111;font-weight:800;
+  padding:3px 10px;border-radius:6px 6px 0 0;white-space:nowrap}
+.badge{position:absolute;top:14px;padding:8px 14px;border-radius:10px;
+  background:rgba(13,17,23,.84);border:1px solid var(--line);backdrop-filter:blur(6px)}
+#info{left:14px;font-weight:600;font-variant-numeric:tabular-nums}
+#info .t{color:var(--muted);font-weight:500;margin-left:6px}
+#ahora{right:14px;text-align:right;min-width:190px}
+#ahora .lab{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+#ahora .val{font-size:26px;font-weight:850;line-height:1.15}
+#ahora .src{font-size:12px;color:var(--muted)}
+#toast{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.9);
+  padding:14px 26px;border-radius:14px;font-size:22px;font-weight:800;opacity:0;pointer-events:none;
+  background:rgba(13,17,23,.92);border:2px solid var(--line);transition:opacity .15s,transform .15s}
+#toast.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#pausado{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);padding:6px 14px;border-radius:99px;
+  background:rgba(13,17,23,.85);border:1px solid var(--gold);color:var(--gold);font-weight:700}
+
+#tl{background:var(--panel);border-top:1px solid var(--line);padding:8px 18px 8px}
+.fila2{display:grid;grid-template-columns:70px 1fr;column-gap:10px;align-items:center}
+.lbl{color:var(--muted);font-size:12px;font-weight:600}
+.lbl.act{color:var(--gold)}
+canvas{display:block;width:100%}
+#cvZoom{height:46px;cursor:pointer}
+#cvMain{cursor:pointer}
+#tlLabs{display:grid}
+#tlLabs div{height:20px;display:flex;align-items:center}
+
+#ctl{background:var(--panel);padding:8px 18px 12px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.botones{display:flex;gap:10px;justify-content:center;width:100%;flex-wrap:wrap}
+.cls{--c:var(--inm);flex:1;max-width:230px;height:56px;border-radius:12px;border:2px solid var(--c);
+  background:color-mix(in srgb,var(--c) 14%,transparent);font-size:17px;font-weight:750;
+  display:flex;align-items:center;justify-content:center;gap:10px}
+.cls:hover{background:color-mix(in srgb,var(--c) 26%,transparent)}
+.cls[data-c=nado]{--c:var(--nado)}
+.cls[data-c=escalamiento]{--c:var(--esc)}
+.cls[data-c=activa]{--c:var(--act)}
+.cls[data-c=""]{--c:#6b7584;max-width:150px}
+.cls.ahora{box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 40%,transparent)}
+.key{font-size:12px;font-weight:700;padding:2px 7px;border-radius:6px;border:1px solid currentColor;opacity:.75}
+.hit{animation:hit .2s ease}
+@keyframes hit{0%{transform:scale(1)}40%{transform:scale(.95)}100%{transform:scale(1)}}
+#vel{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px}
+#vel button{padding:3px 9px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);font-size:12px}
+#vel button.sel{border-color:var(--gold);color:var(--gold)}
+#pista{color:var(--muted);font-size:12px;text-align:center}
+#pista kbd{font:inherit;font-weight:700;color:var(--text);padding:0 5px;border:1px solid var(--line);border-radius:4px}
+
+.capa{position:fixed;inset:0;background:rgba(8,11,15,.86);backdrop-filter:blur(6px);
+  display:grid;place-items:center;z-index:50;padding:16px}
+.card{width:min(660px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;
+  padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.5);max-height:92vh;overflow:auto}
+.card h1{margin:0 0 6px;font-size:26px}
+.card p{color:var(--muted);margin:0 0 16px}
+#drop{border:2px dashed var(--line);border-radius:14px;padding:22px;text-align:center}
+#drop.over{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 7%,transparent)}
+#drop .big{font-size:16px;font-weight:650;margin-bottom:10px}
+#drop button{padding:8px 14px;border-radius:9px;border:1px solid var(--line);background:var(--panel2)}
+.estado{margin:14px 0 0;display:grid;gap:5px;font-size:13px}
+.estado .ok{color:var(--nado)} .estado .no{color:var(--muted)} .estado .mal{color:var(--esc)}
+#fuentes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
+.fuente{text-align:left;padding:12px 14px;border-radius:12px;border:2px solid var(--line);background:var(--panel2)}
+.fuente b{display:block;font-size:15px}
+.fuente span{color:var(--muted);font-size:12.5px}
+.fuente.sel{border-color:var(--gold)}
+.primario{width:100%;height:52px;border-radius:12px;border:0;background:var(--gold);color:#111;
+  font-size:18px;font-weight:800}
+.secundario{width:100%;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);
+  font-weight:650;margin-top:10px}
+#aviso{margin-top:12px;color:var(--esc);font-size:13px;min-height:1em}
+#reiniciar{background:none;border:0;color:var(--muted);text-decoration:underline;font-size:13px;
+  display:block;margin:10px auto 0;padding:4px}
+table.tot{width:100%;border-collapse:collapse;margin:6px 0 16px;font-size:14px;font-variant-numeric:tabular-nums}
+table.tot th{color:var(--muted);font-weight:600;text-align:right;padding:6px 8px;border-bottom:1px solid var(--line)}
+table.tot th:first-child,table.tot td:first-child{text-align:left}
+table.tot td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right}
+.paso{background:var(--panel2);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--muted);margin-top:14px}
+.paso code{color:var(--text)}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <div class="titulo">Por segundo <small id="nomVideo"></small></div>
+    <div id="tubos"></div>
+    <div id="prog" title="Segundos de este tubo que ya viste"><div id="progBar"><div id="progFill"></div></div><div id="progTxt">0%</div></div>
+    <div id="totales"></div>
+    <button class="btnTop" id="btnResumen">Resumen</button>
+    <button class="btnTop" id="btnGuardar" title="Ctrl+S">Guardar</button>
+  </header>
+
+  <main id="stage">
+    <video id="video" muted playsinline preload="auto"></video>
+    <div class="velo"></div><div class="velo"></div><div class="velo"></div><div class="velo"></div>
+    <div id="spot"><span id="spotTxt">Tubo 1</span></div>
+    <div class="badge" id="info">—</div>
+    <div class="badge" id="ahora"><div class="lab">Ahora</div><div class="val" id="ahoraVal">—</div><div class="src" id="ahoraSrc"></div></div>
+    <div id="pausado">En pausa · una tecla cambia solo este segundo</div>
+    <div id="toast"></div>
+  </main>
+
+  <section id="tl">
+    <div class="fila2"><div class="lbl" id="lblZoom">Tubo 1</div><canvas id="cvZoom"></canvas></div>
+    <div class="fila2" style="margin-top:6px"><div id="tlLabs"></div><canvas id="cvMain"></canvas></div>
+  </section>
+
+  <footer id="ctl">
+    <div class="botones">
+      <button class="cls" data-c="nado"><span class="key">1</span>Nado</button>
+      <button class="cls" data-c="inmovilidad"><span class="key">2</span>Inmovilidad</button>
+      <button class="cls" data-c="escalamiento"><span class="key">3</span>Escalamiento</button>
+      <button class="cls" data-c="activa"><span class="key">4</span>Activa</button>
+      <button class="cls" data-c=""><span class="key">0</span>No se ve</button>
+    </div>
+    <div id="vel">Velocidad
+      <button data-v="0.5">0.5×</button><button data-v="0.75">0.75×</button><button data-v="1" class="sel">1×</button>
+      <button data-v="1.5">1.5×</button><button data-v="2">2×</button>
+    </div>
+    <div id="pista"><kbd>Espacio</kbd> pausa · <kbd>←</kbd><kbd>→</kbd> 1 s · <kbd>Shift</kbd>+flecha 5 s · <kbd>R</kbd> vuelve 3 s ·
+      <kbd>Tab</kbd> siguiente tubo · <kbd>Ctrl+Z</kbd> deshacer · clic en la línea para ir a ese segundo</div>
+  </footer>
+</div>
+
+<!-- ======== inicio ======== -->
+<div class="capa" id="inicio">
+  <div class="card">
+    <h1>Revisor por segundo</h1>
+    <p>Una rata a la vez, con el video corriendo. Cuando el cartel <b>Ahora</b> no coincida con lo que ves, pulsa la conducta correcta.</p>
+    <div id="drop">
+      <div class="big">Arrastra aquí el video y sus CSV</div>
+      <div style="color:var(--muted);font-size:12.5px;margin-bottom:10px">
+        <code>_rasgos.csv</code> o <code>_cnn.csv</code> (obligatorio) · <code>_mano.csv</code> y <code>_seg.csv</code> (opcionales)</div>
+      <button id="pick">Elegir archivos</button>
+      <input type="file" id="inFiles" multiple accept="video/*,.mov,.MOV,.mp4,.csv" hidden>
+    </div>
+    <div class="estado" id="estado"></div>
+    <div id="fuentes" hidden></div>
+    <button class="primario" id="btnEmpezar" disabled>Empezar</button>
+    <button id="reiniciar" hidden>Borrar lo que llevo con esta fuente y empezar de nuevo</button>
+    <div id="aviso"></div>
+  </div>
+</div>
+
+<!-- ======== resumen ======== -->
+<div class="capa" id="resumen" hidden>
+  <div class="card">
+    <h1>Segundos por conducta</h1>
+    <p id="resTxt"></p>
+    <table class="tot" id="resTabla"></table>
+    <button class="primario" id="btnGuardarRes">Guardar la hoja</button>
+    <button class="secundario" id="btnCerrarRes">Volver</button>
+    <div class="paso">Guarda el archivo en <code>fst_auto/etiquetas/</code> con el nombre que te propone
+      (<code>&lt;video&gt;_seg.csv</code>).</div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const CLASES = ['nado', 'inmovilidad', 'escalamiento', 'activa'];
+const NOMBRE = {nado: 'Nado', inmovilidad: 'Inmovilidad', escalamiento: 'Escalamiento', activa: 'Activa', '': 'No se ve'};
+const COLOR = {nado: '#2fd27c', inmovilidad: '#4c8dff', escalamiento: '#ff7a45', activa: '#b18cff', '': '#3a4350'};
+const TECLA = {'1': 'nado', '2': 'inmovilidad', '3': 'escalamiento', '4': 'activa', '0': ''};
+const BLOQUE_S = 5;
+// Lo que tarda una persona en reaccionar. Al pulsar con el video corriendo,
+// el cambio se aplica desde este tiempo antes, no desde el instante del clic.
+const REACCION = 0.4;
+const ZOOM_S = 40;       // segundos visibles en la lupa
+const $ = s => document.querySelector(s);
+const video = $('#video');
+
+const S = {
+  videoName: '', videoOk: false,
+  bloques: new Map(),   // "esp-bloque" -> {prop, usar, geo}
+  mano: null,           // Map "esp-bloque" -> clase
+  seg: null,            // {humano: bool, filas: Map "esp-seg" -> {clase, origen}}
+  tubos: [], N: 0, csvVideo: '',
+  fuente: '', ciego: false,
+  L: {},                // esp -> {c: [], p: [], h: Uint8Array, v: Uint8Array, d: Uint8Array}
+  tubo: null, hist: [], raf: 0, ultimoSeg: -1,
+};
+
+/* ---------------- CSV ---------------- */
+function sinAcentos(s) { return s.normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function parseCSV(text) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const out = []; let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; }
+      else f += c;
+    } else if (c === '"') q = true;
+    else if (c === ',') { row.push(f); f = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(f); f = '';
+      if (row.length > 1 || row[0] !== '') out.push(row);
+      row = [];
+    } else f += c;
+  }
+  if (f !== '' || row.length) { row.push(f); out.push(row); }
+  if (!out.length) return [];
+  const head = out.shift().map(h => sinAcentos(h.trim().toLowerCase()));
+  return out.map(r => Object.fromEntries(head.map((h, i) => [h, (r[i] ?? '').trim()])));
+}
+const clase = c => (CLASES.includes(c) ? c : '');
+
+// El tipo de CSV se reconoce por sus columnas, no por el nombre del archivo.
+function tipoCSV(recs) {
+  const k = recs.length ? Object.keys(recs[0]) : [];
+  if (k.includes('segundo')) return 'seg';
+  if (k.includes('bx0') || k.includes('gx0') || k.includes('rng')) return 'rasgos';
+  if (k.includes('bloque') && k.includes('clase')) return 'mano';
+  return '';
+}
+
+function leerRasgos(recs, nombre) {
+  S.bloques.clear();
+  for (const r of recs) {
+    const b = parseInt(r.bloque, 10), e = parseInt(r.especimen, 10);
+    if (!Number.isFinite(b) || !Number.isFinite(e)) continue;
+    const bx = ['bx0', 'by0', 'bx1', 'by1'].map(k => parseFloat(r[k]));
+    const g = ['gx0', 'gx1', 'g_agua', 'g_fondo'].map(k => parseFloat(r[k]));
+    let geo = null;
+    if (bx.every(Number.isFinite)) geo = {x0: bx[0], y0: bx[1], x1: bx[2], y1: bx[3]};
+    else if (g.every(Number.isFinite)) {
+      const col = g[3] - g[2];
+      geo = {x0: g[0], x1: g[1], y0: Math.max(0, g[2] - 0.45 * col), y1: g[3] + 0.05 * col};
+    }
+    const usar = r.usar !== undefined && r.usar !== '' ? parseInt(r.usar, 10) : 1;
+    S.bloques.set(`${e}-${b}`, {prop: clase(r.clase), usar, geo});
+  }
+  S.tubos = [...new Set([...S.bloques.keys()].map(k => +k.split('-')[0]))].sort((a, b) => a - b);
+  S.csvVideo = recs[0].video || nombre.replace(/_(rasgos|cnn)\.csv$/i, '').replace(/\.csv$/i, '');
+  const conProp = [...S.bloques.values()].some(v => v.prop);
+  return `${S.bloques.size} bloques, ${S.tubos.length} tubos` + (conProp ? '' : ', sin propuestas');
+}
+
+function leerMano(recs) {
+  S.mano = new Map();
+  for (const r of recs) {
+    const b = parseInt(r.bloque, 10), e = parseInt(r.especimen, 10);
+    if (Number.isFinite(b) && Number.isFinite(e)) S.mano.set(`${e}-${b}`, clase(r.clase));
+  }
+  return `${S.mano.size} bloques tuyos`;
+}
+
+function leerSeg(recs) {
+  const filas = new Map();
+  let humano = false;
+  for (const r of recs) {
+    const s = parseInt(r.segundo, 10), e = parseInt(r.especimen, 10);
+    if (!Number.isFinite(s) || !Number.isFinite(e)) continue;
+    const origen = r.origen || '';
+    if (origen.startsWith('humano')) humano = true;
+    filas.set(`${e}-${s}`, {clase: clase(r.clase), origen, prop: clase(r.propuesta)});
+  }
+  S.seg = {humano, filas};
+  return humano ? `hoja por segundo tuya (${filas.size} filas)` : `propuesta por segundo (${filas.size} filas)`;
+}
+
+/* ---------------- fuentes de la propuesta ---------------- */
+function fuentesDisponibles() {
+  const f = [];
+  if (S.seg && S.seg.humano) f.push(['hoja', 'Tu hoja por segundo', 'Sigue donde la dejaste']);
+  if (S.seg && !S.seg.humano) f.push(['maqseg', 'La máquina, por segundo', 'Propuesta segundo a segundo']);
+  if (S.mano) f.push(['mano', 'Tus bloques de 5 s', 'Cada segundo empieza con lo que pusiste en su bloque']);
+  if ([...S.bloques.values()].some(v => v.prop)) f.push(['maqbloque', 'La máquina, por bloque', 'Cada segundo empieza con la propuesta de su bloque']);
+  f.push(['cero', 'Desde cero', 'Sin propuesta. Para medir a la máquina de forma limpia']);
+  return f;
+}
+
+function construirEtiquetas() {
+  S.L = {};
+  S.ciego = S.fuente === 'cero';
+  for (const e of S.tubos) {
+    const L = {c: new Array(S.N).fill(''), p: new Array(S.N).fill(''),
+               h: new Uint8Array(S.N), v: new Uint8Array(S.N), d: new Uint8Array(S.N)};
+    for (let s = 0; s < S.N; s++) {
+      const b = Math.floor(s / BLOQUE_S) + 1, kb = `${e}-${b}`, blq = S.bloques.get(kb);
+      let c = '';
+      if (S.fuente === 'mano') c = S.mano.get(kb) ?? '';
+      else if (S.fuente === 'maqbloque') { c = blq ? blq.prop : ''; L.d[s] = blq && blq.usar === 0 ? 1 : 0; }
+      else if (S.fuente === 'maqseg' || S.fuente === 'hoja') {
+        const r = S.seg.filas.get(`${e}-${s + 1}`);
+        if (r) {
+          c = r.clase;
+          if (S.fuente === 'hoja') {
+            L.p[s] = r.prop;
+            L.h[s] = r.origen === 'humano_corrige' || r.origen === 'humano_ciego' ? 1 : 0;
+            L.v[s] = r.origen.startsWith('humano') ? 1 : 0;
+          }
+        }
+      }
+      L.c[s] = c;
+      if (S.fuente !== 'hoja') L.p[s] = c;
+    }
+    S.L[e] = L;
+  }
+}
+
+/* ---------------- memoria del navegador ---------------- */
+const claveLocal = () => `fst-segundos:v1:${S.csvVideo}:${S.N}:${S.fuente}`;
+function guardarLocal() {
+  try {
+    const out = {};
+    for (const e of S.tubos) {
+      const L = S.L[e];
+      out[e] = {c: L.c.join('|'), h: Array.from(L.h).join(''), v: Array.from(L.v).join('')};
+    }
+    localStorage.setItem(claveLocal(), JSON.stringify({L: out, tubo: S.tubo, t: video.currentTime}));
+  } catch (err) { /* navegacion privada: se sigue sin memoria */ }
+}
+function leerLocal() {
+  try { return JSON.parse(localStorage.getItem(claveLocal()) || 'null'); } catch (err) { return null; }
+}
+
+/* ---------------- tiempo ---------------- */
+const segDe = t => Math.max(0, Math.min(S.N - 1, Math.floor(t + 1e-6)));
+const mmss = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+function segActual() { return segDe(video.currentTime); }
+
+/* ---------------- etiquetar ---------------- */
+// Reproduciendo: desde el segundo en que empezo el cambio hasta donde termina
+// el tramo de ese color. Pausado: solo el segundo actual.
+function aplicar(c, boton) {
+  if (!S.tubo) return;
+  const L = S.L[S.tubo];
+  const corriendo = !video.paused;
+  const s0 = corriendo ? segDe(video.currentTime - REACCION) : segActual();
+  let s1 = s0;
+  if (corriendo) {
+    const viejo = L.c[s0];
+    while (s1 + 1 < S.N && L.c[s1 + 1] === viejo) s1++;
+  }
+  S.hist.push({e: S.tubo, s0, c: L.c.slice(s0, s1 + 1), h: L.h.slice(s0, s1 + 1)});
+  if (S.hist.length > 200) S.hist.shift();
+  for (let s = s0; s <= s1; s++) { L.c[s] = c; L.h[s] = 1; }
+  // lo que ya paso bajo el cabezal cuenta como visto
+  for (let s = s0; s <= segActual(); s++) L.v[s] = 1;
+  golpe(boton);
+  aviso(`${NOMBRE[c]} · ${corriendo ? `desde ${mmss(s0)}` : `solo ${mmss(s0)}`}`, COLOR[c] || '#8b98a6');
+  dibujar(); refrescar(); guardarLocal();
+}
+
+function deshacer() {
+  const u = S.hist.pop();
+  if (!u) { aviso('Nada que deshacer', '#8b98a6'); return; }
+  const L = S.L[u.e];
+  u.c.forEach((c, i) => { L.c[u.s0 + i] = c; L.h[u.s0 + i] = u.h[i]; });
+  aviso('↶ Deshecho', '#8b98a6');
+  dibujar(); refrescar(); guardarLocal();
+}
+
+/* ---------------- reproduccion ---------------- */
+function bucle() {
+  const s = segActual();
+  if (S.tubo && s !== S.ultimoSeg) {
+    // Mas rapido que 2x no se alcanza a ver: no cuenta como revisado
+    // Un segundo cuenta como visto cuando el cabezal ya lo dejo atras
+    if (video.playbackRate <= 2 && S.ultimoSeg >= 0 && s > S.ultimoSeg && s - S.ultimoSeg < 4) {
+      const L = S.L[S.tubo];
+      for (let k = S.ultimoSeg; k < s; k++) L.v[k] = 1;
+    }
+    S.ultimoSeg = s;
+    ubicarFoco(); refrescar();
+    if (s % 5 === 0) guardarLocal();
+  }
+  dibujar();
+  if (!video.paused) S.raf = requestAnimationFrame(bucle);
+}
+function jugar() {
+  S.ultimoSeg = segActual();
+  video.play().then(() => { cancelAnimationFrame(S.raf); S.raf = requestAnimationFrame(bucle); }).catch(() => {});
+  $('#pausado').hidden = true;
+}
+function pausa() {
+  if (video.paused) jugar();
+  else { video.pause(); cancelAnimationFrame(S.raf); $('#pausado').hidden = false; guardarLocal(); refrescar(); dibujar(); }
+}
+function ir(t) {
+  t = Math.max(0, Math.min(S.N - 0.05, t));
+  video.currentTime = t + 0.02;
+  S.ultimoSeg = segDe(t);
+  ubicarFoco(); refrescar(); dibujar();
+}
+video.addEventListener('ended', () => {
+  if (S.tubo && video.playbackRate <= 2) S.L[S.tubo].v[S.N - 1] = 1;
+  $('#pausado').hidden = false; refrescar(); dibujar(); guardarLocal();
+  aviso(`Tubo ${S.tubo} terminado · Tab para el siguiente`, '#f5c542'); });
+
+function elegirTubo(e) {
+  S.tubo = e;
+  document.querySelectorAll('#tubos button').forEach(b => b.classList.toggle('sel', +b.dataset.e === e));
+  document.querySelectorAll('#tlLabs div').forEach(d => d.classList.toggle('act', +d.dataset.e === e));
+  $('#lblZoom').textContent = `Tubo ${e}`;
+  ubicarFoco(); refrescar(); dibujar(); guardarLocal();
+}
+
+/* ---------------- foco ---------------- */
+function cajaActual() {
+  if (!S.tubo) return null;
+  const b = Math.floor(segActual() / BLOQUE_S) + 1;
+  for (let d = 0; d < 80; d++) {
+    for (const bb of [b - d, b + d]) {
+      const r = S.bloques.get(`${S.tubo}-${bb}`);
+      if (r && r.geo) return r.geo;
+    }
+  }
+  return null;
+}
+function ubicarFoco() {
+  const spot = $('#spot'), velos = document.querySelectorAll('.velo'), g = cajaActual();
+  if (!g || !video.videoWidth) { spot.style.display = 'none'; velos.forEach(v => v.style.display = 'none'); return; }
+  const st = $('#stage').getBoundingClientRect();
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const k = Math.min(st.width / vw, st.height / vh);
+  const ox = (st.width - vw * k) / 2, oy = (st.height - vh * k) / 2;
+  const x0 = Math.max(0, g.x0), x1 = Math.min(vw, g.x1), y0 = Math.max(0, g.y0), y1 = Math.min(vh, g.y1);
+  const L = ox + x0 * k, T = oy + y0 * k, W = (x1 - x0) * k, H = (y1 - y0) * k;
+  Object.assign(spot.style, {display: 'block', left: L + 'px', top: T + 'px', width: W + 'px', height: H + 'px'});
+  const cajas = [[0, 0, st.width, T], [0, T + H, st.width, st.height - T - H], [0, T, L, H], [L + W, T, st.width - L - W, H]];
+  velos.forEach((v, i) => {
+    const [x, y, w, h] = cajas[i];
+    Object.assign(v.style, {display: 'block', left: x + 'px', top: y + 'px', width: Math.max(0, w) + 'px', height: Math.max(0, h) + 'px'});
+  });
+  $('#spotTxt').textContent = `Tubo ${S.tubo}`;
+}
+
+/* ---------------- lineas de tiempo (canvas) ---------------- */
+function prepCanvas(cv, alto) {
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(alto * dpr)) {
+    cv.width = Math.round(w * dpr); cv.height = Math.round(alto * dpr); cv.style.height = alto + 'px';
+  }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, alto);
+  return [ctx, w];
+}
+function colorSeg(L, s) {
+  if (S.ciego && !L.h[s]) return null;
+  return COLOR[L.c[s]] || COLOR[''];
+}
+
+function dibujar() {
+  if (!S.N) return;
+  const t = video.currentTime;
+  // --- linea completa, un renglon por tubo ---
+  const cv = $('#cvMain'), fila = 20, alto = fila * S.tubos.length;
+  const [ctx, w] = prepCanvas(cv, alto);
+  const px = w / S.N;
+  S.tubos.forEach((e, i) => {
+    const L = S.L[e], y = i * fila;
+    ctx.fillStyle = '#1c242e'; ctx.fillRect(0, y + 2, w, fila - 4);
+    for (let s = 0; s < S.N; s++) {
+      const col = colorSeg(L, s);
+      if (!col) continue;
+      ctx.globalAlpha = L.v[s] ? 1 : (L.d[s] ? 0.22 : 0.4);
+      ctx.fillStyle = col;
+      ctx.fillRect(s * px, y + 3, Math.max(px - (px > 3 ? 0.5 : 0), 0.6), fila - 6);
+    }
+    ctx.globalAlpha = 1;
+    if (e === S.tubo) { ctx.strokeStyle = '#f5c542'; ctx.lineWidth = 1.5; ctx.strokeRect(0.75, y + 1.5, w - 1.5, fila - 3); }
+  });
+  ctx.fillStyle = '#fff'; ctx.fillRect(t / S.N * w - 1, 0, 2, alto);
+
+  // --- lupa: ZOOM_S segundos alrededor del cabezal, solo el tubo actual ---
+  if (!S.tubo) return;
+  const cz = $('#cvZoom'), az = 46;
+  const [cx, wz] = prepCanvas(cz, az);
+  const L = S.L[S.tubo];
+  const ini = Math.max(0, Math.min(S.N - ZOOM_S, t - ZOOM_S / 2));
+  const pz = wz / ZOOM_S;
+  for (let s = Math.floor(ini); s < Math.min(S.N, ini + ZOOM_S + 1); s++) {
+    const x = (s - ini) * pz, col = colorSeg(L, s);
+    cx.globalAlpha = L.v[s] ? 1 : 0.45;
+    cx.fillStyle = col || '#1c242e';
+    cx.fillRect(x + 1, 4, pz - 2, 26);
+    if (L.h[s] && !S.ciego) { cx.globalAlpha = 1; cx.fillStyle = '#fff'; cx.fillRect(x + 1, 4, pz - 2, 3); }
+    cx.globalAlpha = 1;
+    if (s % 5 === 0) {
+      cx.fillStyle = '#8b98a6'; cx.font = '11px system-ui'; cx.textAlign = 'left';
+      cx.fillText(mmss(s), x + 2, 43);
+      cx.fillRect(x, 30, 1, 4);
+    }
+  }
+  const xh = (t - ini) * pz;
+  cx.fillStyle = '#fff'; cx.fillRect(xh - 1, 0, 2, 34);
+}
+
+function clicLinea(ev, zoom) {
+  const cv = ev.currentTarget, r = cv.getBoundingClientRect(), x = ev.clientX - r.left;
+  if (zoom) {
+    const t = video.currentTime, ini = Math.max(0, Math.min(S.N - ZOOM_S, t - ZOOM_S / 2));
+    ir(Math.floor(ini + x / r.width * ZOOM_S) + 0.02);
+  } else {
+    const i = Math.floor((ev.clientY - r.top) / 20);
+    if (S.tubos[i] !== undefined && S.tubos[i] !== S.tubo) elegirTubo(S.tubos[i]);
+    ir(Math.floor(x / r.width * S.N) + 0.02);
+  }
+}
+
+/* ---------------- interfaz ---------------- */
+function totales(e) {
+  const out = {nado: 0, inmovilidad: 0, escalamiento: 0, activa: 0, '': 0};
+  for (const c of S.L[e].c) out[c in out ? c : '']++;
+  return out;
+}
+function refrescar() {
+  if (!S.tubo) return;
+  const L = S.L[S.tubo], s = segActual();
+  const vistos = L.v.reduce((a, b) => a + b, 0);
+  $('#progTxt').textContent = `${Math.round(100 * vistos / S.N)}% visto`;
+  $('#progFill').style.width = (100 * vistos / S.N) + '%';
+  const tot = totales(S.tubo);
+  $('#totales').innerHTML = S.ciego && !L.h.some(x => x) ? '' :
+    CLASES.map(c => `<div class="chip"><i style="background:${COLOR[c]}"></i><b>${tot[c]}</b> s</div>`).join('');
+  $('#info').innerHTML = `Tubo ${S.tubo} · ${mmss(s)}<span class="t">segundo ${s + 1} de ${S.N} · ${video.playbackRate}×</span>`;
+  const c = L.c[s];
+  const oculto = S.ciego && !L.h[s];
+  $('#ahoraVal').textContent = oculto ? '—' : NOMBRE[c];
+  $('#ahoraVal').style.color = oculto ? 'var(--muted)' : (COLOR[c] === COLOR[''] ? 'var(--muted)' : COLOR[c]);
+  $('#ahoraSrc').textContent = oculto ? 'sin marcar' : L.h[s] ? 'lo marcaste tú' : L.d[s] ? 'propuesta dudosa' : 'propuesta';
+  document.querySelectorAll('.cls').forEach(b => b.classList.toggle('ahora', !oculto && b.dataset.c === c));
+}
+
+function golpe(el) { if (!el) return; el.classList.remove('hit'); void el.offsetWidth; el.classList.add('hit'); }
+let tAviso = 0;
+function aviso(txt, color) {
+  const t = $('#toast');
+  t.textContent = txt; t.style.color = color; t.style.borderColor = color;
+  t.classList.add('on'); clearTimeout(tAviso);
+  tAviso = setTimeout(() => t.classList.remove('on'), 800);
+}
+
+/* ---------------- resumen y exportar ---------------- */
+function mostrarResumen() {
+  const filas = S.tubos.map(e => {
+    const t = totales(e), L = S.L[e], vistos = L.v.reduce((a, b) => a + b, 0);
+    return `<tr><td>Tubo ${e}</td>${CLASES.map(c => `<td>${t[c]}</td>`).join('')}<td>${t['']}</td>` +
+           `<td>${Math.round(100 * vistos / S.N)}%</td></tr>`;
+  }).join('');
+  $('#resTabla').innerHTML = `<tr><th></th>${CLASES.map(c => `<th style="color:${COLOR[c]}">${NOMBRE[c]}</th>`).join('')}` +
+    `<th>Sin decidir</th><th>Visto</th></tr>` + filas;
+  $('#resTxt').textContent = `Segundos de cada conducta en los ${S.N} s del video. ` +
+    'Solo cuenta como revisado lo que viste a 2× o más lento.';
+  $('#resumen').hidden = false;
+  if (!video.paused) pausa();
+}
+
+function construirHoja() {
+  const L0 = ['especimen,segundo,inicio_s,tiempo,clase,origen,propuesta'];
+  for (const e of S.tubos) {
+    const L = S.L[e];
+    for (let s = 0; s < S.N; s++) {
+      // Solo cuenta como tuyo lo que el video ya recorrio. Un cambio pintado
+      // hacia adelante sin haberlo visto todavia es una suposicion, no una
+      // etiqueta.
+      let origen;
+      if (!L.v[s] || (S.ciego && !L.h[s])) origen = 'sin_revisar';
+      else if (S.ciego) origen = 'humano_ciego';
+      else origen = L.c[s] === L.p[s] ? 'humano_confirma' : 'humano_corrige';
+      const c = S.ciego && !L.h[s] ? '' : L.c[s];
+      L0.push([e, s + 1, s, mmss(s), c, origen, S.ciego ? '' : L.p[s]].join(','));
+    }
+  }
+  return '﻿' + L0.join('\r\n') + '\r\n';
+}
+
+async function guardarHoja() {
+  const nombre = `${S.csvVideo || S.videoName}_seg.csv`;
+  const blob = new Blob([construirHoja()], {type: 'text/csv;charset=utf-8'});
+  if (window.showSaveFilePicker) {
+    try {
+      const h = await showSaveFilePicker({suggestedName: nombre, types: [{description: 'Hoja CSV', accept: {'text/csv': ['.csv']}}]});
+      const w = await h.createWritable(); await w.write(blob); await w.close();
+      aviso('✓ Guardado', '#2fd27c'); return;
+    } catch (err) { if (err.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nombre;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  aviso('✓ Descargado · muévelo a etiquetas/', '#2fd27c');
+}
+
+/* ---------------- inicio ---------------- */
+const estados = {};
+function marcar(id, ok, txt) {
+  estados[id] = [ok, txt];
+  $('#estado').innerHTML = Object.values(estados).map(([o, t]) =>
+    `<div><span class="${o === true ? 'ok' : o === false ? 'mal' : 'no'}">${o === true ? '●' : o === false ? '✕' : '○'}</span> ${t}</div>`).join('');
+}
+
+function revisarListo() {
+  const listo = S.videoOk && S.bloques.size > 0;
+  const av = [];
+  if (S.videoOk && S.csvVideo && S.videoName.toLowerCase() !== S.csvVideo.toLowerCase())
+    av.push(`Ojo: los CSV son de "${S.csvVideo}" y el video es "${S.videoName}". ¿Son el mismo?`);
+  if (S.videoOk && !S.bloques.size) av.push('Falta el _rasgos.csv (o _cnn.csv): sin él no sé dónde está cada tubo.');
+  $('#aviso').textContent = av.join(' ');
+  const f = fuentesDisponibles();
+  // Mientras no elijas tu, se propone la mejor disponible: los archivos llegan
+  // en cualquier orden y la primera que aparece no tiene por que ser la mejor.
+  if (!S.fuenteElegida || !f.some(x => x[0] === S.fuente)) S.fuente = f[0][0];
+  $('#fuentes').hidden = !S.bloques.size;
+  $('#fuentes').innerHTML = f.map(([k, t, d]) =>
+    `<button class="fuente${k === S.fuente ? ' sel' : ''}" data-f="${k}"><b>${t}</b><span>${d}</span></button>`).join('');
+  document.querySelectorAll('.fuente').forEach(b => b.addEventListener('click', () => {
+    S.fuente = b.dataset.f; S.fuenteElegida = true; revisarListo();
+  }));
+  if (listo) {
+    S.N = Math.max(1, Math.floor(video.duration));
+    const prev = leerLocal();
+    $('#btnEmpezar').textContent = prev ? 'Continuar donde lo dejé' : 'Empezar';
+    $('#reiniciar').hidden = !prev;
+  }
+  $('#btnEmpezar').disabled = !listo;
+}
+
+function tomarArchivos(files) {
+  for (const f of files) {
+    if (/\.csv$/i.test(f.name)) {
+      f.text().then(t => {
+        const recs = parseCSV(t), tipo = tipoCSV(recs);
+        try {
+          if (tipo === 'rasgos') marcar('rasgos', true, `${f.name} · ${leerRasgos(recs, f.name)}`);
+          else if (tipo === 'mano') marcar('mano', true, `${f.name} · ${leerMano(recs)}`);
+          else if (tipo === 'seg') marcar('seg', true, `${f.name} · ${leerSeg(recs)}`);
+          else marcar(f.name, false, `${f.name} · no reconozco este CSV`);
+        } catch (err) { marcar(f.name, false, `${f.name} · ${err.message}`); }
+        revisarListo();
+      });
+    } else ponerVideo(URL.createObjectURL(f), f.name);
+  }
+}
+
+function ponerVideo(src, nombre) {
+  S.videoOk = false;
+  S.videoName = nombre.replace(/\.[^.]+$/, '');
+  marcar('video', null, `${nombre} · cargando…`);
+  video.src = src;
+  video.onloadedmetadata = () => {
+    S.videoOk = true;
+    marcar('video', true, `${nombre} · ${video.videoWidth}×${video.videoHeight} · ${mmss(Math.floor(video.duration))}`);
+    revisarListo();
+  };
+  video.onerror = () => { marcar('video', false, `${nombre} · este navegador no lo reproduce; prueba Chrome o Edge`); revisarListo(); };
+  $('#nomVideo').textContent = S.videoName;
+}
+
+function empezar() {
+  S.N = Math.max(1, Math.floor(video.duration));
+  construirEtiquetas();
+  const prev = leerLocal();
+  let t0 = 0, tubo = S.tubos[0];
+  if (prev && prev.L) {
+    for (const e of S.tubos) {
+      const p = prev.L[e];
+      if (!p) continue;
+      const c = p.c.split('|');
+      if (c.length !== S.N) continue;
+      S.L[e].c = c;
+      S.L[e].h = Uint8Array.from(p.h, x => +x);
+      S.L[e].v = Uint8Array.from(p.v, x => +x);
+    }
+    if (S.tubos.includes(prev.tubo)) tubo = prev.tubo;
+    t0 = prev.t || 0;
+  }
+  $('#tubos').innerHTML = S.tubos.map(e => `<button data-e="${e}">Tubo ${e}</button>`).join('');
+  document.querySelectorAll('#tubos button').forEach(b => b.addEventListener('click', () => elegirTubo(+b.dataset.e)));
+  $('#tlLabs').innerHTML = S.tubos.map(e => `<div class="lbl" data-e="${e}">Tubo ${e}</div>`).join('');
+  $('#inicio').hidden = true;
+  $('#ahora').querySelector('.lab').textContent = S.ciego ? 'Ahora (tú)' : 'Ahora';
+  elegirTubo(tubo);
+  ir(t0);
+  $('#pausado').hidden = false;
+  aviso(S.ciego ? 'Desde cero: marca la conducta al empezar y en cada cambio' : 'Espacio para empezar', '#f5c542');
+}
+
+/* ---------------- eventos ---------------- */
+document.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTimeout(() => b.blur(), 0); }, true);
+document.querySelectorAll('.cls').forEach(b => b.addEventListener('click', () => aplicar(b.dataset.c, b)));
+document.querySelectorAll('#vel button').forEach(b => b.addEventListener('click', () => {
+  video.playbackRate = +b.dataset.v;
+  document.querySelectorAll('#vel button').forEach(x => x.classList.toggle('sel', x === b));
+  refrescar();
+}));
+$('#cvMain').addEventListener('click', e => clicLinea(e, false));
+$('#cvZoom').addEventListener('click', e => clicLinea(e, true));
+$('#btnGuardar').addEventListener('click', guardarHoja);
+$('#btnGuardarRes').addEventListener('click', guardarHoja);
+$('#btnResumen').addEventListener('click', mostrarResumen);
+$('#btnCerrarRes').addEventListener('click', () => { $('#resumen').hidden = true; });
+$('#btnEmpezar').addEventListener('click', empezar);
+$('#reiniciar').addEventListener('click', () => {
+  if (!confirm('¿Borrar lo que llevas con esta fuente y empezar de nuevo?')) return;
+  try { localStorage.removeItem(claveLocal()); } catch (err) { /* nada */ }
+  revisarListo();
+});
+$('#pick').addEventListener('click', () => $('#inFiles').click());
+$('#inFiles').addEventListener('change', e => tomarArchivos(e.target.files));
+const drop = $('#drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => tomarArchivos(e.dataTransfer.files));
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => { e.preventDefault(); if (!$('#inicio').hidden) tomarArchivos(e.dataTransfer.files); });
+
+window.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (S.N && $('#inicio').hidden) guardarHoja(); return; }
+  if (!$('#inicio').hidden) { if (e.key === 'Enter' && !$('#btnEmpezar').disabled) empezar(); return; }
+  if (!$('#resumen').hidden) { if (e.key === 'Escape') $('#resumen').hidden = true; return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); deshacer(); return; }
+  if (e.repeat) return;
+  const k = e.key;
+  if (k in TECLA) aplicar(TECLA[k], document.querySelector(`.cls[data-c="${TECLA[k]}"]`));
+  else if (k === ' ') { e.preventDefault(); pausa(); }
+  else if (k === 'ArrowRight') { e.preventDefault(); ir(Math.floor(video.currentTime) + (e.shiftKey ? 5 : 1)); }
+  else if (k === 'ArrowLeft') { e.preventDefault(); ir(Math.floor(video.currentTime) - (e.shiftKey ? 5 : 1)); }
+  else if (k === 'r' || k === 'R') ir(video.currentTime - 3);
+  else if (k === 'Tab') {
+    e.preventDefault();
+    const i = S.tubos.indexOf(S.tubo), n = S.tubos.length;
+    elegirTubo(S.tubos[(i + (e.shiftKey ? n - 1 : 1)) % n]);
+    ir(0);
+    if (!video.paused) pausa();
+  }
+});
+window.addEventListener('resize', () => { ubicarFoco(); dibujar(); });
+
+/* Carga por direccion (?video=...&csv=a.csv,b.csv), si se sirve la carpeta
+   con un servidor local. Con doble clic se usa la pantalla de inicio. */
+(async () => {
+  const p = new URLSearchParams(location.search);
+  if (p.get('video')) ponerVideo(p.get('video'), p.get('video').split('/').pop());
+  for (const c of (p.get('csv') || '').split(',').filter(Boolean)) {
+    try {
+      const t = await (await fetch(c, {cache: 'no-store'})).text();
+      tomarArchivos([{name: c.split('/').pop(), text: async () => t}]);
+    } catch (err) { marcar(c, false, `${c} · no se pudo leer`); }
+  }
+})();
+</script>
+</body>
+</html>
