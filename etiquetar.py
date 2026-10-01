@@ -23,6 +23,12 @@ Por cada video deja:
     <nombre>_rasgos.csv        un renglon por bloque de 5 s y por especimen
     <nombre>_control.jpg       MIRALA. Si las lineas no caen sobre el agua y
                                el suelo del tubo, ese video no sirve.
+    <nombre>_cuadros.csv       las medidas de cada fotograma (para no tener que
+                               volver a leer el video nunca)
+    <nombre>_segundos.csv      con --modelo: la conducta de cada rata en cada
+                               segundo (lo abre revisor_segundos.html)
+    <nombre>_resumen.csv       con --modelo: segundos de cada conducta por rata,
+                               por minuto y en total
 
 Conducta activa. En el diseño de Porsolt solo se distingue inmovil de no
 inmovil; Detke separo despues lo activo en nado y escalamiento. Cuando el
@@ -130,6 +136,19 @@ def una(ruta, args, paq, log=print):
     log('  5/5 agregando en bloques de 5 s')
     bl = lib.bloques(filas, g, fps, log=log)
 
+    # Las medidas de cada fotograma se guardan tal cual: con ellas se calculan
+    # los segundos (segundos.py) o cualquier otra ventana sin volver a leer el
+    # video, que es lo que cuesta diez minutos.
+    cu = pd.DataFrame(filas)
+    cu['gx0'] = cu['s'].map(lambda s: g['tubos'][s][0])
+    cu['gx1'] = cu['s'].map(lambda s: g['tubos'][s][1])
+    cu['g_agua'], cu['g_fondo'] = g['y_agua'], g['y_fondo']
+    cu['escala'] = float(np.nanmedian(cu['largo']))     # la misma que usa bloques()
+    cu.insert(0, 'paso', args.paso)
+    dest_cu = os.path.join(args.salida, nombre + '_cuadros.csv')
+    cu.round(4).to_csv(dest_cu, index=False, encoding='utf-8')
+    log('      medidas por fotograma -> %s' % dest_cu)
+
     bl = lib.cajas_crudas(bl, lut, g, fps, WH)
     bl.insert(0, 'video', nombre)
     bl.insert(2, 'rotar', lib.ROT)
@@ -150,6 +169,14 @@ def una(ruta, args, paq, log=print):
     dest = os.path.join(args.salida, nombre + '_rasgos.csv')
     bl.to_csv(dest, index=False, encoding='utf-8-sig')
     log('  -> %s   (%.0f s)' % (dest, time.time() - t0))
+
+    if paq:
+        # Con el mismo modelo, una ventana que se corre de segundo en segundo:
+        # el conteo por segundo que pidio el laboratorio (ver segundos.py)
+        import argparse as _ap
+        import segundos
+        segundos.proponer(_ap.Namespace(archivos=[dest_cu], modelo=args.modelo,
+                                        ventana=segundos.VENTANA, umbral=args.umbral))
     return dest
 
 

@@ -264,3 +264,21 @@ revisor por bloques).
   `sin_revisar`. Desde cero sale `humano_ciego`.
 - Hoja: `<video>_seg.csv` con especimen, segundo (1..N), inicio_s, tiempo,
   clase, origen, propuesta. N = floor(duracion del video).
+
+Fase 2 hecha (sin etiquetar a mano por segundo):
+- `etiquetar.py` guarda `X_cuadros.csv` (medidas por fotograma + geometria y
+  escala) y, con `--modelo`, llama a `segundos.proponer`: deja
+  `X_segundos.csv` y `X_resumen.csv` (segundos por conducta, por minuto y total).
+- `lib.rasgos_tramo` es el calculo de los 15 rasgos sacado de `bloques()`
+  (verificado identico en IMG_0826 y AcuN1); `lib.segundos` lo aplica a una
+  ventana centrada en cada segundo.
+- Metodo elegido, MEDIDO: el modelo de bloques (`modelo_fst.joblib`) aplicado
+  a una ventana deslizante. Entrenar un modelo nuevo solo con ventanas de
+  "tramos puros" fue peor (3 videos: 0.691/0.730/0.754 con ventanas 3/4/5 s,
+  contra 0.852 del modelo por bloques). Modelo de bloques deslizado, 3
+  videos: 5 s 0.857, 4 s 0.843. Con los 15 videos de entrenamiento y
+  ventana 4 s (`segundos.py validar`): exactitud 0.885, kappa +0.794, F1
+  esc 0.80 / inm 0.87 / nado 0.91; 48% de los bloques tienen mas de una
+  conducta. Ventana 3 s falla porque con --paso 12 son ~7 mediciones.
+- Para tener `_cuadros.csv` de los 14 videos viejos hay que pasarlos otra vez
+  por etiquetar.py (~9 min cada uno). Los `_mano.csv` no se tocan.

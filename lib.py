@@ -512,6 +512,79 @@ def cajas_crudas(bl, lut, g, fps, WH=None):
 
 # ----------------- 5. rasgos por bloque, normalizados -----------------
 
+def rasgos_tramo(d, tubo, ya, yf, escala):
+    """Los 15 rasgos de un tramo de tiempo de un tubo (filas de extraer,
+    ordenadas por t). Sirve igual para un bloque de 5 s que para una ventana
+    de 3 s alrededor de un segundo. Sin al menos 5 mediciones con el animal
+    visible, todo sale vacio."""
+    cx, cy = d['cx'].to_numpy(), d['cy'].to_numpy()
+    ok = ~np.isnan(cx)
+    r = {k: np.nan for k in RASGOS}
+    if ok.sum() < 5:
+        return r
+    col = float(yf - ya)
+    y_medio = (ya + yf) / 2
+    xs, ys = medfilt1(cx[ok], 5), medfilt1(cy[ok], 5)
+    dur = max(float(d['t'].iloc[-1] - d['t'].iloc[0]), 1e-3)
+    r['rng']   = float(np.hypot(xs.max() - xs.min(), ys.max() - ys.min())) / escala
+    r['spanx'] = float(xs.max() - xs.min()) / escala
+    r['spany'] = float(ys.max() - ys.min()) / escala
+    r['path']  = float(np.hypot(np.diff(xs), np.diff(ys)).sum()) / escala / dur
+    x0, x1 = tubo
+    qx = (xs >= (x0 + x1) / 2).astype(int)
+    qy = (np.clip(ys, ya, yf) >= y_medio).astype(int)
+    q = qy * 2 + qx
+    # Permanencia minima en TIEMPO, no en fotogramas: con paso 2 hay
+    # 75 mediciones por bloque y con paso 12 solo 12, asi que exigir
+    # "3 fotogramas" significaria 0.2 s en un caso y 1.2 s en el otro.
+    minimo = max(2, int(round(DWELL_S * len(xs) / max(dur, 1e-3))))
+    r['nq'] = int(sum(1 for k in range(4) if (q == k).sum() >= minimo))
+    cab = d['cabeza'].to_numpy()[ok]
+    if np.isfinite(cab).any():
+        r['hrise'] = float(np.nanmax(ya - cab)) / col
+        r['hmean'] = float(np.nanmean(ya - cab)) / col
+    r['above'] = float(np.nanmean(d['above'].to_numpy()[ok])) / escala ** 2
+    r['area']  = float(np.nanmean(d['area'].to_numpy()[ok])) / escala ** 2
+    r['vert']  = float(np.nanmean(d['vert']))
+    r['elong'] = float(np.nanmean(d['elong']))
+    me = d['me'].to_numpy()
+    if np.isfinite(me).any():
+        r['me'] = float(np.nanmean(me))
+        r['me_max'] = float(np.nanmax(me))
+    r['iou']  = float(np.nanmean(d['iou']))
+    r['dice'] = float(np.nanmean(d['dice']))
+    return r
+
+
+VENTANA_S = 4.0   # segundos que se miran alrededor de cada segundo (ver segundos.py)
+
+
+def segundos(cuadros, ventana=VENTANA_S):
+    """Rasgos de una ventana centrada en CADA segundo, por tubo.
+
+    'cuadros' es la tabla que guarda etiquetar.py (_cuadros.csv): una fila por
+    fotograma medido y tubo, con la geometria y la escala del video. Un
+    segundo k (de k a k+1 s) se describe con lo que paso entre
+    k + 0.5 - ventana/2 y k + 0.5 + ventana/2: un segundo solo es muy poco
+    para distinguir flotar de nadar despacio."""
+    import pandas as pd
+    escala = float(cuadros['escala'].iloc[0])
+    ya, yf = float(cuadros['g_agua'].iloc[0]), float(cuadros['g_fondo'].iloc[0])
+    n_seg = int(np.floor(cuadros['t'].max() + 1e-6)) + 1
+    out = []
+    for s, d in cuadros.groupby('s'):
+        d = d.sort_values('t').reset_index(drop=True)
+        tubo = (float(d['gx0'].iloc[0]), float(d['gx1'].iloc[0]))
+        t = d['t'].to_numpy()
+        for k in range(n_seg):
+            c = k + 0.5
+            i0, i1 = np.searchsorted(t, [c - ventana / 2, c + ventana / 2])
+            r = dict(especimen=int(s), segundo=k + 1, inicio_s=k, n=int(i1 - i0))
+            r.update(rasgos_tramo(d.iloc[i0:i1], tubo, ya, yf, escala))
+            out.append(r)
+    return pd.DataFrame(out)
+
+
 def bloques(filas, g, fps, escala=None, log=print):
     """Agrega a bloques de 5 s y normaliza:
        distancias  -> en largos de cuerpo
@@ -528,8 +601,6 @@ def bloques(filas, g, fps, escala=None, log=print):
     if not (escala > 5):
         raise RuntimeError('no se pudo medir el largo del cuerpo')
     ya, yf = g['y_agua'], g['y_fondo']
-    col = float(yf - ya)
-    y_medio = (ya + yf) / 2
 
     df['bloque'] = (df['t'] // BLOCK_S).astype(int) + 1
     out = []
@@ -545,42 +616,7 @@ def bloques(filas, g, fps, escala=None, log=print):
                  # recortar y marcar el tubo sin reprocesar el video entero.
                  gx0=int(g['tubos'][s][0]), gx1=int(g['tubos'][s][1]),
                  g_agua=int(ya), g_fondo=int(yf))
-        if n_ok >= 5:
-            xs, ys = medfilt1(cx[ok], 5), medfilt1(cy[ok], 5)
-            dur = max(float(d['t'].iloc[-1] - d['t'].iloc[0]), 1e-3)
-            r['rng']   = float(np.hypot(xs.max() - xs.min(),
-                                        ys.max() - ys.min())) / escala
-            r['spanx'] = float(xs.max() - xs.min()) / escala
-            r['spany'] = float(ys.max() - ys.min()) / escala
-            r['path']  = float(np.hypot(np.diff(xs), np.diff(ys)).sum()) / escala / dur
-            x0, x1 = g['tubos'][s]
-            qx = (xs >= (x0 + x1) / 2).astype(int)
-            qy = (np.clip(ys, ya, yf) >= y_medio).astype(int)
-            q = qy * 2 + qx
-            # Permanencia minima en TIEMPO, no en fotogramas: con paso 2 hay
-            # 75 mediciones por bloque y con paso 12 solo 12, asi que exigir
-            # "3 fotogramas" significaria 0.2 s en un caso y 1.2 s en el otro.
-            minimo = max(2, int(round(DWELL_S * len(xs) / max(dur, 1e-3))))
-            r['nq'] = int(sum(1 for k in range(4) if (q == k).sum() >= minimo))
-            cab = d['cabeza'].to_numpy()[ok]
-            if np.isfinite(cab).any():
-                r['hrise'] = float(np.nanmax(ya - cab)) / col
-                r['hmean'] = float(np.nanmean(ya - cab)) / col
-            else:
-                r['hrise'] = r['hmean'] = np.nan
-            r['above'] = float(np.nanmean(d['above'].to_numpy()[ok])) / escala ** 2
-            r['area']  = float(np.nanmean(d['area'].to_numpy()[ok])) / escala ** 2
-            r['vert']  = float(np.nanmean(d['vert']))
-            r['elong'] = float(np.nanmean(d['elong']))
-            me = d['me'].to_numpy()
-            hay = np.isfinite(me).any()
-            r['me']     = float(np.nanmean(me)) if hay else np.nan
-            r['me_max'] = float(np.nanmax(me)) if hay else np.nan
-            r['iou']    = float(np.nanmean(d['iou']))
-            r['dice']   = float(np.nanmean(d['dice']))
-        else:
-            for k in RASGOS:
-                r[k] = np.nan
+        r.update(rasgos_tramo(d, g['tubos'][s], ya, yf, escala))
         out.append(r)
     res = pd.DataFrame(out).sort_values(['especimen', 'bloque']).reset_index(drop=True)
     # El ultimo bloque casi nunca cabe completo (un video de 301 s deja 1 s
