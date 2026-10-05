@@ -3,9 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Revisor por segundo</title>
+<title>FST · Revisión segundo a segundo</title>
 <!--
   Revisor segundo a segundo del test de nado forzado.
+  Aspecto: mockups v2 de la tesis (revision.html), sistema Modernist con los
+  colores IPN. Todo va en este archivo para que abra con doble clic.
 
   Abre este archivo con doble clic (Chrome o Edge) y arrastra a la vez:
     - el video
@@ -14,225 +16,294 @@
     - opcional: un _seg.csv, para seguir una hoja por segundo ya guardada
 
   Se revisa una rata a la vez, con el video corriendo. Cada segundo empieza con
-  una propuesta. Cuando lo que ves no coincide con el cartel "Ahora", pulsa la
-  conducta correcta: cambia desde ese segundo hasta el siguiente cambio de color.
+  una propuesta. Cuando lo que ves no coincide con "Ahora", pulsa la conducta
+  correcta: cambia desde ese segundo hasta el siguiente cambio de color.
 
   Teclas:  1 nado  2 inmovilidad  3 escalamiento  4 conducta activa  0 no se ve
            Espacio pausa   <- -> un segundo   Shift+<- -> cinco segundos
-           R vuelve 3 s    Tab siguiente tubo   Ctrl+Z deshacer   Ctrl+S guardar
+           R vuelve 3 s    Tab siguiente especimen   Ctrl+Z deshacer   Ctrl+S guardar
 
   Pausado, una tecla cambia SOLO el segundo donde estas: sirve para corregir
   con precision. Reproduciendo, cambia hasta el siguiente cambio de color.
 
   Guarda <video>_seg.csv: una fila por rata y por segundo.
 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap">
 <style>
+/* ── tokens: Modernist retemplado con los colores IPN (mockups/v2/assets) ── */
 :root{
-  --bg:#0d1117; --panel:#151b23; --panel2:#1c242e; --line:#2b3440;
-  --text:#e6edf3; --muted:#8b98a6;
-  --inm:#4c8dff; --nado:#2fd27c; --esc:#ff7a45; --act:#b18cff; --gold:#f5c542; --none:#3a4350;
+  --color-bg:#f4f4f5; --color-surface:#e7e7e9; --color-text:#231f20;
+  --color-accent:#6f1d46; --color-divider:color-mix(in srgb,#231f20 40%,transparent);
+  --color-neutral-100:#f4f4f5; --color-neutral-200:#e7e7e9; --color-neutral-300:#d3d4d6;
+  --color-neutral-400:#b2b4b7; --color-neutral-500:#919396; --color-neutral-700:#636569;
+  --color-neutral-900:#2c2e30;
+  --color-accent-100:#f8eef3; --color-accent-300:#ddb2c5; --color-accent-600:#5b1739;
+  --color-accent-700:#43112a; --color-accent-800:#2c0b1c;
+  --font-heading:"Archivo",system-ui,sans-serif; --font-body:"Archivo",system-ui,sans-serif;
+  --muted:color-mix(in srgb,var(--color-text) 55%,transparent);
+  --muted-2:color-mix(in srgb,var(--color-text) 65%,transparent);
+  --shadow-lg:0 12px 32px color-mix(in srgb,#2c2e30 22%,transparent);
 }
-*{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
-  font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
-button{font:inherit;color:inherit;cursor:pointer}
-button:disabled{cursor:not-allowed;opacity:.35}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);font-size:15px;line-height:1.55}
+h2,h3{font-family:var(--font-heading);font-weight:800;line-height:1.12;letter-spacing:-.015em;margin:0 0 8px}
+h2{font-size:32px} h3{font-size:22px}
+p{margin:0 0 12px}
+button{font:inherit;color:inherit}
+:focus{outline:none} :focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}
 [hidden]{display:none!important}
+code{font-size:12px;background:var(--color-surface);padding:0 4px}
 
-#app{display:grid;grid-template-rows:auto 1fr auto auto;height:100vh}
+.num{font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.nd{font-family:var(--font-heading);font-weight:800}
+.k{font-family:var(--font-heading);font-weight:800;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.hint{font-size:11.5px;line-height:1.6;color:color-mix(in srgb,var(--color-text) 60%,transparent)}
 
-#top{display:flex;align-items:center;gap:16px;padding:10px 18px;background:var(--panel);
-  border-bottom:1px solid var(--line);min-height:52px;flex-wrap:wrap}
-#top .titulo{font-weight:700;white-space:nowrap}
-#top .titulo small{color:var(--muted);font-weight:500;margin-left:8px}
-#tubos{display:flex;gap:6px}
-#tubos button{padding:5px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);
-  font-weight:650;font-variant-numeric:tabular-nums}
-#tubos button.sel{border-color:var(--gold);color:var(--gold)}
-#tubos button small{color:var(--muted);font-weight:500;margin-left:5px}
-#prog{flex:1;display:flex;align-items:center;gap:10px;min-width:160px;max-width:360px}
-#progBar{flex:1;height:10px;border-radius:99px;background:var(--panel2);overflow:hidden}
-#progFill{height:100%;width:0;background:linear-gradient(90deg,var(--gold),#ffdd7a);border-radius:99px;
-  transition:width .3s}
-#progTxt{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
-#totales{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
-.chip{padding:4px 10px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);
-  color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
-.chip b{color:var(--text)}
-.chip i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:0}
-.btnTop{padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel2)}
-.btnTop:hover{border-color:var(--gold);color:var(--gold)}
+.app{max-width:1240px;margin:0 auto;min-height:100vh;background:var(--color-bg);border-left:2px solid var(--color-text);border-right:2px solid var(--color-text)}
+.page{padding:28px 32px 36px}
+.nav{display:flex;align-items:center;gap:16px;padding:12px 16px;border-bottom:2px solid var(--color-divider)}
+.nav-brand{font-family:var(--font-heading);font-weight:800;font-size:18px}
+.crumbs{margin-right:auto;font-size:12px;color:var(--muted)}
+.crumbs .here{color:var(--color-text)}
 
-#stage{position:relative;overflow:hidden;background:#000;min-height:0}
-#video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
-#spot{position:absolute;border:3px solid var(--gold);border-radius:6px;pointer-events:none;display:none}
-.velo{position:absolute;background:rgba(0,0,0,.58);pointer-events:none;display:none}
-#spot span{position:absolute;top:-30px;left:-3px;background:var(--gold);color:#111;font-weight:800;
-  padding:3px 10px;border-radius:6px 6px 0 0;white-space:nowrap}
-.badge{position:absolute;top:14px;padding:8px 14px;border-radius:10px;
-  background:rgba(13,17,23,.84);border:1px solid var(--line);backdrop-filter:blur(6px)}
-#info{left:14px;font-weight:600;font-variant-numeric:tabular-nums}
-#info .t{color:var(--muted);font-weight:500;margin-left:6px}
-#ahora{right:14px;text-align:right;min-width:190px}
-#ahora .lab{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
-#ahora .val{font-size:26px;font-weight:850;line-height:1.15}
-#ahora .src{font-size:12px;color:var(--muted)}
-#toast{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.9);
-  padding:14px 26px;border-radius:14px;font-size:22px;font-weight:800;opacity:0;pointer-events:none;
-  background:rgba(13,17,23,.92);border:2px solid var(--line);transition:opacity .15s,transform .15s}
-#toast.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
-#pausado{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);padding:6px 14px;border-radius:99px;
-  background:rgba(13,17,23,.85);border:1px solid var(--gold);color:var(--gold);font-weight:700}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;white-space:nowrap;font-family:var(--font-heading);font-weight:800;font-size:14px;line-height:1.2;color:var(--color-text);background:transparent;border:1px solid transparent;padding:8px 14px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-primary{background:var(--color-accent);color:var(--color-bg)}
+.btn-primary:not(:disabled):hover{background:var(--color-accent-600)}
+.btn-secondary{border-color:var(--color-divider)}
+.btn-secondary:hover{background:color-mix(in srgb,var(--color-text) 7%,transparent)}
+.linkbtn{border:0;background:none;padding:0;font:inherit;color:var(--color-accent);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.seg{display:inline-flex;overflow:hidden;border:1px solid var(--color-divider)}
+.seg-opt{display:inline-flex;align-items:center;padding:7px 12px;font-size:13px;cursor:pointer;user-select:none}
+.seg-opt+.seg-opt{border-left:1px solid var(--color-divider)}
+.seg-opt.on{background:var(--color-accent);color:var(--color-bg)}
+.seg-opt:not(.on):hover{background:color-mix(in srgb,var(--color-text) 7%,transparent)}
+.tag{display:inline-flex;align-items:center;font-size:11px;letter-spacing:.02em;padding:3px 10px}
+.tag-accent{background:var(--color-accent-100);color:var(--color-accent-800)}
+.note-bar{padding:9px 11px;background:var(--color-accent-100);border-left:4px solid var(--color-accent);font-size:12px}
+.ok-bar{padding:11px 16px;background:var(--color-surface);border-left:4px solid var(--color-text);font-size:12px}
+.meter{height:6px;background:color-mix(in srgb,var(--color-text) 12%,transparent)}
+.meter>div{height:100%;background:var(--color-accent);transition:width .3s}
+.table{width:100%;border-collapse:collapse;font-size:13px}
+.table th{text-align:right;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 60%,transparent);padding:8px;border-bottom:2px solid var(--color-divider);font-weight:400}
+.table td{padding:8px;border-bottom:1px solid var(--color-divider);text-align:right}
+.table th:first-child,.table td:first-child{text-align:left}
 
-#tl{background:var(--panel);border-top:1px solid var(--line);padding:8px 18px 8px}
-.fila2{display:grid;grid-template-columns:70px 1fr;column-gap:10px;align-items:center}
-.lbl{color:var(--muted);font-size:12px;font-weight:600}
-.lbl.act{color:var(--gold)}
-canvas{display:block;width:100%}
-#cvZoom{height:46px;cursor:pointer}
-#cvMain{cursor:pointer}
-#tlLabs{display:grid}
-#tlLabs div{height:20px;display:flex;align-items:center}
+/* pestañas de especímenes */
+.tab{font-family:var(--font-heading);font-weight:800;font-size:13px;padding:10px 15px;border:0;border-bottom:2px solid transparent;margin-bottom:-2px;background:transparent;color:var(--color-text);cursor:pointer;display:flex;align-items:baseline;gap:8px}
+.tab.on{background:var(--color-accent);color:var(--color-bg);border-bottom-color:var(--color-accent)}
+.tab:not(.on):hover{background:color-mix(in srgb,var(--color-text) 7%,transparent)}
+.tab small{font-family:var(--font-body);font-weight:400;font-size:11px;opacity:.75}
+.sw{width:11px;height:11px;flex:none;border:1px solid var(--color-divider);display:inline-block}
+.sw.nado{background:var(--color-text)} .sw.inmovilidad{background:var(--color-accent)} .sw.escalamiento{background:var(--color-neutral-400)}
+.sw.activa{background:repeating-linear-gradient(135deg,var(--color-text) 0 3px,var(--color-neutral-400) 3px 6px)}
+.sw.nove{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--color-text) 18%,transparent) 0 2px,transparent 2px 5px)}
 
-#ctl{background:var(--panel);padding:8px 18px 12px;display:flex;flex-direction:column;align-items:center;gap:8px}
-.botones{display:flex;gap:10px;justify-content:center;width:100%;flex-wrap:wrap}
-.cls{--c:var(--inm);flex:1;max-width:230px;height:56px;border-radius:12px;border:2px solid var(--c);
-  background:color-mix(in srgb,var(--c) 14%,transparent);font-size:17px;font-weight:750;
-  display:flex;align-items:center;justify-content:center;gap:10px}
-.cls:hover{background:color-mix(in srgb,var(--c) 26%,transparent)}
-.cls[data-c=nado]{--c:var(--nado)}
-.cls[data-c=escalamiento]{--c:var(--esc)}
-.cls[data-c=activa]{--c:var(--act)}
-.cls[data-c=""]{--c:#6b7584;max-width:150px}
-.cls.ahora{box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 40%,transparent)}
-.key{font-size:12px;font-weight:700;padding:2px 7px;border-radius:6px;border:1px solid currentColor;opacity:.75}
-.hit{animation:hit .2s ease}
-@keyframes hit{0%{transform:scale(1)}40%{transform:scale(.95)}100%{transform:scale(1)}}
-#vel{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px}
-#vel button{padding:3px 9px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);font-size:12px}
-#vel button.sel{border-color:var(--gold);color:var(--gold)}
-#pista{color:var(--muted);font-size:12px;text-align:center}
-#pista kbd{font:inherit;font-weight:700;color:var(--text);padding:0 5px;border:1px solid var(--line);border-radius:4px}
+/* escenario: el video con el tubo destacado */
+.stage{position:relative;height:clamp(320px,56vh,620px);background:#16181a;overflow:hidden;border:2px solid var(--color-text)}
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;z-index:0}
+.velo,.spot,.badge,.pausa,.toast{z-index:1}
+.velo{position:absolute;background:rgba(0,0,0,.6);pointer-events:none;display:none}
+.spot{position:absolute;border:3px solid var(--color-accent-300);pointer-events:none;display:none}
+.spot span{position:absolute;top:-3px;left:-3px;transform:translateY(-100%);background:var(--color-accent-300);color:var(--color-text);font-family:var(--font-heading);font-weight:800;font-size:11px;padding:3px 8px;white-space:nowrap}
+.badge{position:absolute;top:12px;right:12px;background:var(--color-bg);border:2px solid var(--color-text);padding:6px 10px;font-size:12px}
+.pausa{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:var(--color-bg);border:2px solid var(--color-text);border-left:4px solid var(--color-accent);padding:5px 12px;font-size:12px;white-space:nowrap}
+.toast{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--color-bg);border:2px solid var(--color-text);padding:10px 20px;font-family:var(--font-heading);font-weight:800;font-size:17px;opacity:0;transition:opacity .15s;pointer-events:none;white-space:nowrap}
+.toast.on{opacity:1}
 
-.capa{position:fixed;inset:0;background:rgba(8,11,15,.86);backdrop-filter:blur(6px);
-  display:grid;place-items:center;z-index:50;padding:16px}
-.card{width:min(660px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;
-  padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.5);max-height:92vh;overflow:auto}
-.card h1{margin:0 0 6px;font-size:26px}
-.card p{color:var(--muted);margin:0 0 16px}
-#drop{border:2px dashed var(--line);border-radius:14px;padding:22px;text-align:center}
-#drop.over{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 7%,transparent)}
-#drop .big{font-size:16px;font-weight:650;margin-bottom:10px}
-#drop button{padding:8px 14px;border-radius:9px;border:1px solid var(--line);background:var(--panel2)}
-.estado{margin:14px 0 0;display:grid;gap:5px;font-size:13px}
-.estado .ok{color:var(--nado)} .estado .no{color:var(--muted)} .estado .mal{color:var(--esc)}
-#fuentes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
-.fuente{text-align:left;padding:12px 14px;border-radius:12px;border:2px solid var(--line);background:var(--panel2)}
-.fuente b{display:block;font-size:15px}
-.fuente span{color:var(--muted);font-size:12.5px}
-.fuente.sel{border-color:var(--gold)}
-.primario{width:100%;height:52px;border-radius:12px;border:0;background:var(--gold);color:#111;
-  font-size:18px;font-weight:800}
-.secundario{width:100%;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);
-  font-weight:650;margin-top:10px}
-#aviso{margin-top:12px;color:var(--esc);font-size:13px;min-height:1em}
-#reiniciar{background:none;border:0;color:var(--muted);text-decoration:underline;font-size:13px;
-  display:block;margin:10px auto 0;padding:4px}
-table.tot{width:100%;border-collapse:collapse;margin:6px 0 16px;font-size:14px;font-variant-numeric:tabular-nums}
-table.tot th{color:var(--muted);font-weight:600;text-align:right;padding:6px 8px;border-bottom:1px solid var(--line)}
-table.tot th:first-child,table.tot td:first-child{text-align:left}
-table.tot td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right}
-.paso{background:var(--panel2);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--muted);margin-top:14px}
-.paso code{color:var(--text)}
+/* líneas de tiempo */
+.tl-row{display:grid;grid-template-columns:118px 1fr;column-gap:12px;align-items:center}
+canvas{display:block;width:100%;cursor:pointer}
+.tl-labs div{height:22px;display:flex;align-items:center;font-size:11.5px;color:var(--muted)}
+.tl-labs div.act{color:var(--color-accent-700);font-weight:700}
+
+/* botones de conducta */
+.cls{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;height:50px;padding:0 8px;white-space:nowrap;border:2px solid var(--color-text);background:var(--color-bg);color:var(--color-text);font-family:var(--font-heading);font-weight:800;font-size:13px;cursor:pointer}
+.cls:hover{background:color-mix(in srgb,var(--color-text) 7%,transparent)}
+.cls.ahora{background:var(--color-text);color:var(--color-bg)}
+.cls[data-c=""]{flex:.75}
+.cls .sw{width:13px;height:13px}
+.key{font-family:var(--font-body);font-weight:700;font-size:11px;padding:1px 6px;border:1px solid currentColor;opacity:.8}
+.hit{animation:hit .18s ease}
+@keyframes hit{40%{transform:scale(.96)}}
+kbd{font-family:var(--font-body);font-size:11px;font-weight:700;padding:0 5px;border:1px solid var(--color-divider);background:var(--color-bg)}
+.ahora-val{display:flex;align-items:center;gap:10px;font-family:var(--font-heading);font-weight:800;font-size:24px;line-height:1.15}
+.ahora-val .sw{width:16px;height:16px}
+.tot-row{display:grid;grid-template-columns:1fr auto auto;gap:0 14px;align-items:center}
+
+/* capas: inicio y resumen */
+.capa{position:fixed;inset:0;display:grid;place-items:center;padding:16px;z-index:50;background:color-mix(in srgb,var(--color-neutral-900) 50%,transparent)}
+.dialog{width:min(680px,100%);max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:28px;background:var(--color-bg);border:2px solid var(--color-text);box-shadow:var(--shadow-lg)}
+.dialog p{font-size:13px;color:var(--muted-2)}
+#drop{border:2px dashed var(--color-divider);padding:22px;text-align:center;background:var(--color-surface)}
+#drop.over{border-color:var(--color-accent);background:var(--color-accent-100)}
+.estado{display:grid;gap:4px;font-size:12.5px}
+.estado .ok{color:var(--color-text)} .estado .no{color:var(--muted)} .estado .mal{color:var(--color-accent)}
+#fuentes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fuente{text-align:left;padding:12px 14px;border:2px solid var(--color-divider);background:var(--color-bg);cursor:pointer}
+.fuente b{display:block;font-family:var(--font-heading);font-weight:800;font-size:14px}
+.fuente span{color:var(--muted);font-size:12px}
+.fuente:hover{border-color:var(--color-text)}
+.fuente.sel{border-color:var(--color-accent);background:var(--color-accent-100)}
+#aviso{color:var(--color-accent-700);font-size:12.5px}
+#aviso:empty{display:none}
+
+@media (max-width:900px){
+  .page{padding:20px 16px 28px}
+  .cuerpo{grid-template-columns:1fr!important}
+  .cuerpo>div{padding:0!important}
+  .botones{flex-wrap:wrap}
+  .cls{flex:1 1 40%}
+  #fuentes{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
-<div id="app">
-  <header id="top">
-    <div class="titulo">Por segundo <small id="nomVideo"></small></div>
-    <div id="tubos"></div>
-    <div id="prog" title="Segundos de este tubo que ya viste"><div id="progBar"><div id="progFill"></div></div><div id="progTxt">0%</div></div>
-    <div id="totales"></div>
-    <button class="btnTop" id="btnResumen">Resumen</button>
-    <button class="btnTop" id="btnGuardar" title="Ctrl+S">Guardar</button>
-  </header>
+<div class="app">
+  <nav class="nav">
+    <span class="nav-brand">FST</span>
+    <span class="crumbs">Etiquetas / <span id="crumbVideo">sin video</span> / <span class="here">Revisión segundo a segundo</span></span>
+  </nav>
 
-  <main id="stage">
-    <video id="video" muted playsinline preload="auto"></video>
-    <div class="velo"></div><div class="velo"></div><div class="velo"></div><div class="velo"></div>
-    <div id="spot"><span id="spotTxt">Tubo 1</span></div>
-    <div class="badge" id="info">—</div>
-    <div class="badge" id="ahora"><div class="lab">Ahora</div><div class="val" id="ahoraVal">—</div><div class="src" id="ahoraSrc"></div></div>
-    <div id="pausado">En pausa · una tecla cambia solo este segundo</div>
-    <div id="toast"></div>
-  </main>
-
-  <section id="tl">
-    <div class="fila2"><div class="lbl" id="lblZoom">Tubo 1</div><canvas id="cvZoom"></canvas></div>
-    <div class="fila2" style="margin-top:6px"><div id="tlLabs"></div><canvas id="cvMain"></canvas></div>
-  </section>
-
-  <footer id="ctl">
-    <div class="botones">
-      <button class="cls" data-c="nado"><span class="key">1</span>Nado</button>
-      <button class="cls" data-c="inmovilidad"><span class="key">2</span>Inmovilidad</button>
-      <button class="cls" data-c="escalamiento"><span class="key">3</span>Escalamiento</button>
-      <button class="cls" data-c="activa"><span class="key">4</span>Activa</button>
-      <button class="cls" data-c=""><span class="key">0</span>No se ve</button>
+  <div class="page">
+    <div style="display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap">
+      <div style="flex:1;min-width:260px">
+        <h2 style="margin:0 0 9px">Revisión segundo a segundo<span id="tituloVideo"></span></h2>
+        <div class="num" style="font-size:12.5px;color:var(--muted-2)" id="subtitulo">Carga un video y sus CSV para empezar</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn btn-secondary" id="btnResumen">Resumen</button>
+        <button type="button" class="btn btn-primary" id="btnGuardar" title="Ctrl+S">Guardar hoja</button>
+      </div>
     </div>
-    <div id="vel">Velocidad
-      <button data-v="0.5">0.5×</button><button data-v="0.75">0.75×</button><button data-v="1" class="sel">1×</button>
-      <button data-v="1.5">1.5×</button><button data-v="2">2×</button>
+
+    <div id="estadoBar" style="margin-top:16px"></div>
+
+    <div id="tabs" style="display:flex;flex-wrap:wrap;border-bottom:2px solid var(--color-divider);margin:18px 0 20px"></div>
+
+    <div class="cuerpo" style="display:grid;grid-template-columns:1fr 300px;gap:2px;background:var(--color-divider)">
+      <div style="background:var(--color-bg);padding-right:24px;min-width:0">
+        <div class="stage" id="stage">
+          <video id="video" muted playsinline preload="auto"></video>
+          <div class="velo"></div><div class="velo"></div><div class="velo"></div><div class="velo"></div>
+          <div class="spot" id="spot"><span id="spotTxt"></span></div>
+          <div class="badge num" id="info">—</div>
+          <div class="pausa" id="pausa">En pausa · una tecla cambia solo este segundo</div>
+          <div class="toast" id="toast"></div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="tl-row">
+            <div class="k">Lupa · 40 s</div>
+            <canvas id="cvZoom"></canvas>
+          </div>
+          <div class="tl-row" style="margin-top:8px">
+            <div class="tl-labs" id="tlLabs"></div>
+            <canvas id="cvMain"></canvas>
+          </div>
+          <div class="tl-row" style="margin-top:2px">
+            <div></div>
+            <div class="num" id="eje" style="position:relative;height:17px;font-size:11px;color:var(--muted)"></div>
+          </div>
+        </div>
+
+        <div class="botones" style="display:flex;gap:8px;margin-top:18px">
+          <button type="button" class="cls" data-c="nado"><span class="key">1</span><span class="sw nado"></span>Nado activo</button>
+          <button type="button" class="cls" data-c="inmovilidad"><span class="key">2</span><span class="sw inmovilidad"></span>Inmovilidad</button>
+          <button type="button" class="cls" data-c="escalamiento"><span class="key">3</span><span class="sw escalamiento"></span>Escalamiento</button>
+          <button type="button" class="cls" data-c="activa"><span class="key">4</span><span class="sw activa"></span>Conducta activa</button>
+          <button type="button" class="cls" data-c=""><span class="key">0</span><span class="sw nove"></span>No se ve</button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap">
+          <span class="k">Velocidad</span>
+          <span class="seg" id="vel">
+            <span class="seg-opt" data-v="0.5">0.5×</span><span class="seg-opt" data-v="0.75">0.75×</span><span class="seg-opt on" data-v="1">1×</span><span class="seg-opt" data-v="1.5">1.5×</span><span class="seg-opt" data-v="2">2×</span>
+          </span>
+          <button type="button" class="btn btn-secondary" id="btnPlay" style="min-width:132px">Reproducir</button>
+        </div>
+        <p class="hint" style="margin:12px 0 0"><kbd>Espacio</kbd> pausa · <kbd>←</kbd> <kbd>→</kbd> 1 s · <kbd>Shift</kbd>+flecha 5 s · <kbd>R</kbd> vuelve 3 s · <kbd>Tab</kbd> siguiente espécimen · <kbd>Ctrl</kbd>+<kbd>Z</kbd> deshacer · <kbd>Ctrl</kbd>+<kbd>S</kbd> guardar · clic en una línea para ir a ese segundo</p>
+      </div>
+
+      <div style="background:var(--color-bg);padding-left:24px;display:flex;flex-direction:column;gap:24px">
+        <div>
+          <div class="k" style="margin-bottom:10px" id="lblAhora">Ahora</div>
+          <div class="ahora-val" id="ahoraVal">—</div>
+          <div style="font-size:12px;margin-top:6px;color:var(--muted-2)" id="ahoraSrc"></div>
+          <p class="hint" style="margin:10px 0 0">Si no coincide con lo que ves, pulsa la conducta correcta. Con el video corriendo, el cambio se aplica desde 0.4 s antes del clic hasta el siguiente cambio de color; en pausa, solo al segundo actual.</p>
+        </div>
+
+        <div>
+          <div class="k" style="margin-bottom:10px">Avance de este espécimen</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="meter" style="flex:1"><div id="meter" style="width:0"></div></div>
+            <span class="num nd" style="font-size:13px" id="pctVisto">0 %</span>
+          </div>
+          <p class="hint" style="margin:8px 0 0">Solo cuenta como visto lo que pasó a 2× o más lento.</p>
+        </div>
+
+        <div>
+          <div class="k" style="margin-bottom:6px" id="lblTot">Segundos por conducta</div>
+          <div class="tot-row" style="font-size:11px;color:var(--muted);padding-bottom:4px;border-bottom:1px solid var(--color-divider)"><span></span><span id="colProp">Propuesta</span><span style="min-width:42px;text-align:right">Ahora</span></div>
+          <div id="totales"></div>
+        </div>
+
+        <div>
+          <div class="k" style="margin-bottom:10px">Nivel al guardar</div>
+          <span class="tag tag-accent" id="nivel">Preciso (3 conductas)</span>
+          <p class="hint" style="margin:8px 0 0" id="nivelTxt"></p>
+        </div>
+      </div>
     </div>
-    <div id="pista"><kbd>Espacio</kbd> pausa · <kbd>←</kbd><kbd>→</kbd> 1 s · <kbd>Shift</kbd>+flecha 5 s · <kbd>R</kbd> vuelve 3 s ·
-      <kbd>Tab</kbd> siguiente tubo · <kbd>Ctrl+Z</kbd> deshacer · clic en la línea para ir a ese segundo</div>
-  </footer>
+  </div>
 </div>
 
 <!-- ======== inicio ======== -->
 <div class="capa" id="inicio">
-  <div class="card">
-    <h1>Revisor por segundo</h1>
-    <p>Una rata a la vez, con el video corriendo. Cuando el cartel <b>Ahora</b> no coincida con lo que ves, pulsa la conducta correcta.</p>
+  <div class="dialog">
+    <h3>Revisión segundo a segundo</h3>
+    <p>Un espécimen a la vez, con el video corriendo. Cuando <b>Ahora</b> no coincida con lo que ves, pulsa la conducta correcta.</p>
     <div id="drop">
-      <div class="big">Arrastra aquí el video y sus CSV</div>
-      <div style="color:var(--muted);font-size:12.5px;margin-bottom:10px">
-        <code>_rasgos.csv</code> o <code>_cnn.csv</code> (obligatorio) · <code>_mano.csv</code> y <code>_seg.csv</code> (opcionales)</div>
-      <button id="pick">Elegir archivos</button>
+      <div class="nd" style="font-size:15px;margin-bottom:6px">Arrastra aquí el video y sus CSV</div>
+      <div class="hint" style="margin-bottom:12px"><code>_rasgos.csv</code> o <code>_cnn.csv</code> (obligatorio) · <code>_mano.csv</code> y <code>_seg.csv</code> (opcionales)</div>
+      <button type="button" class="btn btn-secondary" id="pick">Elegir archivos</button>
       <input type="file" id="inFiles" multiple accept="video/*,.mov,.MOV,.mp4,.csv" hidden>
     </div>
     <div class="estado" id="estado"></div>
+    <div id="lblFuentes" class="k" hidden>Con qué empieza cada segundo</div>
     <div id="fuentes" hidden></div>
-    <button class="primario" id="btnEmpezar" disabled>Empezar</button>
-    <button id="reiniciar" hidden>Borrar lo que llevo con esta fuente y empezar de nuevo</button>
     <div id="aviso"></div>
+    <button type="button" class="btn btn-primary" id="btnEmpezar" style="height:46px;font-size:15px" disabled>Empezar</button>
+    <button type="button" class="linkbtn" id="reiniciar" style="font-size:12px;align-self:center" hidden>Borrar lo que llevo con esta fuente y empezar de nuevo</button>
   </div>
 </div>
 
 <!-- ======== resumen ======== -->
 <div class="capa" id="resumen" hidden>
-  <div class="card">
-    <h1>Segundos por conducta</h1>
+  <div class="dialog">
+    <h3>Segundos por conducta</h3>
     <p id="resTxt"></p>
-    <table class="tot" id="resTabla"></table>
-    <button class="primario" id="btnGuardarRes">Guardar la hoja</button>
-    <button class="secundario" id="btnCerrarRes">Volver</button>
-    <div class="paso">Guarda el archivo en <code>fst_auto/etiquetas/</code> con el nombre que te propone
-      (<code>&lt;video&gt;_seg.csv</code>).</div>
+    <table class="table num" id="resTabla"></table>
+    <div class="note-bar">Guarda el archivo en <code>fst_auto/etiquetas/</code> con el nombre que te propone (<code>&lt;video&gt;_seg.csv</code>).</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" class="btn btn-secondary" id="btnCerrarRes">Volver</button>
+      <button type="button" class="btn btn-primary" id="btnGuardarRes">Guardar la hoja</button>
+    </div>
   </div>
 </div>
 
 <script>
 'use strict';
 const CLASES = ['nado', 'inmovilidad', 'escalamiento', 'activa'];
-const NOMBRE = {nado: 'Nado', inmovilidad: 'Inmovilidad', escalamiento: 'Escalamiento', activa: 'Activa', '': 'No se ve'};
-const COLOR = {nado: '#2fd27c', inmovilidad: '#4c8dff', escalamiento: '#ff7a45', activa: '#b18cff', '': '#3a4350'};
+const NOMBRE = {nado: 'Nado activo', inmovilidad: 'Inmovilidad', escalamiento: 'Escalamiento', activa: 'Conducta activa', '': 'No se ve'};
 const TECLA = {'1': 'nado', '2': 'inmovilidad', '3': 'escalamiento', '4': 'activa', '0': ''};
+const FUENTE = {hoja: 'tu hoja por segundo', maqseg: 'la máquina, por segundo', mano: 'tus bloques de 5 s', maqbloque: 'la máquina, por bloque', cero: 'desde cero'};
 const BLOQUE_S = 5;
 // Lo que tarda una persona en reaccionar. Al pulsar con el video corriendo,
 // el cambio se aplica desde este tiempo antes, no desde el instante del clic.
 const REACCION = 0.4;
 const ZOOM_S = 40;       // segundos visibles en la lupa
+const FILA = 22;         // alto de cada renglón de la línea completa
 const $ = s => document.querySelector(s);
 const video = $('#video');
 
@@ -244,8 +315,26 @@ const S = {
   tubos: [], N: 0, csvVideo: '',
   fuente: '', ciego: false,
   L: {},                // esp -> {c: [], p: [], h: Uint8Array, v: Uint8Array, d: Uint8Array}
-  tubo: null, hist: [], raf: 0, ultimoSeg: -1,
+  tubo: null, hist: [], raf: 0, ultimoSeg: -1, guardado: false,
 };
+
+/* ---------------- colores, tomados de los tokens ---------------- */
+const css = getComputedStyle(document.documentElement);
+const tok = n => css.getPropertyValue(n).trim();
+const C = {ink: tok('--color-text'), acc: tok('--color-accent'), n400: tok('--color-neutral-400'),
+           n200: tok('--color-neutral-200'), bg: tok('--color-bg'), a300: tok('--color-accent-300')};
+function rayas(a, b, paso) {
+  const c = document.createElement('canvas'); c.width = c.height = paso * 2;
+  const x = c.getContext('2d');
+  x.fillStyle = b; x.fillRect(0, 0, c.width, c.height);
+  x.strokeStyle = a; x.lineWidth = paso * 0.7;
+  for (let i = -2; i <= 2; i++) { x.beginPath(); x.moveTo(i * paso * 2, c.height); x.lineTo(i * paso * 2 + c.width, 0); x.stroke(); }
+  return c;
+}
+const PAT = {activa: rayas(C.ink, C.n400, 3), nove: rayas('#c9cacc', C.bg, 2.5)};
+const fillDe = (ctx, c) => c === 'nado' ? C.ink : c === 'inmovilidad' ? C.acc : c === 'escalamiento' ? C.n400
+  : ctx.createPattern(c === 'activa' ? PAT.activa : PAT.nove, 'repeat');
+const sw = c => `<span class="sw ${c || 'nove'}"></span>`;
 
 /* ---------------- CSV ---------------- */
 function sinAcentos(s) { return s.normalize('NFD').replace(/[̀-ͯ]/g, ''); }
@@ -301,7 +390,7 @@ function leerRasgos(recs, nombre) {
   S.tubos = [...new Set([...S.bloques.keys()].map(k => +k.split('-')[0]))].sort((a, b) => a - b);
   S.csvVideo = recs[0].video || nombre.replace(/_(rasgos|cnn)\.csv$/i, '').replace(/\.csv$/i, '');
   const conProp = [...S.bloques.values()].some(v => v.prop);
-  return `${S.bloques.size} bloques, ${S.tubos.length} tubos` + (conProp ? '' : ', sin propuestas');
+  return `${S.bloques.size} bloques, ${S.tubos.length} especímenes` + (conProp ? '' : ', sin propuestas');
 }
 
 function leerMano(recs) {
@@ -387,6 +476,7 @@ function leerLocal() {
 const segDe = t => Math.max(0, Math.min(S.N - 1, Math.floor(t + 1e-6)));
 const mmss = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 function segActual() { return segDe(video.currentTime); }
+const corregidos = e => S.L[e].c.reduce((a, c, i) => a + (S.L[e].h[i] && c !== S.L[e].p[i] ? 1 : 0), 0);
 
 /* ---------------- etiquetar ---------------- */
 // Reproduciendo: desde el segundo en que empezo el cambio hasta donde termina
@@ -407,25 +497,26 @@ function aplicar(c, boton) {
   // lo que ya paso bajo el cabezal cuenta como visto
   for (let s = s0; s <= segActual(); s++) L.v[s] = 1;
   golpe(boton);
-  aviso(`${NOMBRE[c]} · ${corriendo ? `desde ${mmss(s0)}` : `solo ${mmss(s0)}`}`, COLOR[c] || '#8b98a6');
-  dibujar(); refrescar(); guardarLocal();
+  aviso(`${NOMBRE[c]} · ${corriendo ? `desde ${mmss(s0)}` : `solo ${mmss(s0)}`}`);
+  S.guardado = false;
+  pintar(); guardarLocal();
 }
 
 function deshacer() {
   const u = S.hist.pop();
-  if (!u) { aviso('Nada que deshacer', '#8b98a6'); return; }
+  if (!u) { aviso('Nada que deshacer'); return; }
   const L = S.L[u.e];
   u.c.forEach((c, i) => { L.c[u.s0 + i] = c; L.h[u.s0 + i] = u.h[i]; });
-  aviso('↶ Deshecho', '#8b98a6');
-  dibujar(); refrescar(); guardarLocal();
+  aviso('Deshecho');
+  pintar(); guardarLocal();
 }
 
 /* ---------------- reproduccion ---------------- */
 function bucle() {
   const s = segActual();
   if (S.tubo && s !== S.ultimoSeg) {
-    // Mas rapido que 2x no se alcanza a ver: no cuenta como revisado
-    // Un segundo cuenta como visto cuando el cabezal ya lo dejo atras
+    // Mas rapido que 2x no se alcanza a ver: no cuenta como revisado.
+    // Un segundo cuenta como visto cuando el cabezal ya lo dejo atras.
     if (video.playbackRate <= 2 && S.ultimoSeg >= 0 && s > S.ultimoSeg && s - S.ultimoSeg < 4) {
       const L = S.L[S.tubo];
       for (let k = S.ultimoSeg; k < s; k++) L.v[k] = 1;
@@ -439,12 +530,12 @@ function bucle() {
 }
 function jugar() {
   S.ultimoSeg = segActual();
-  video.play().then(() => { cancelAnimationFrame(S.raf); S.raf = requestAnimationFrame(bucle); }).catch(() => {});
-  $('#pausado').hidden = true;
+  video.play().then(() => { cancelAnimationFrame(S.raf); S.raf = requestAnimationFrame(bucle); refrescar(); }).catch(() => {});
 }
 function pausa() {
+  if (!S.tubo) return;
   if (video.paused) jugar();
-  else { video.pause(); cancelAnimationFrame(S.raf); $('#pausado').hidden = false; guardarLocal(); refrescar(); dibujar(); }
+  else { video.pause(); cancelAnimationFrame(S.raf); guardarLocal(); pintar(); }
 }
 function ir(t) {
   t = Math.max(0, Math.min(S.N - 0.05, t));
@@ -454,15 +545,14 @@ function ir(t) {
 }
 video.addEventListener('ended', () => {
   if (S.tubo && video.playbackRate <= 2) S.L[S.tubo].v[S.N - 1] = 1;
-  $('#pausado').hidden = false; refrescar(); dibujar(); guardarLocal();
-  aviso(`Tubo ${S.tubo} terminado · Tab para el siguiente`, '#f5c542'); });
+  pintar(); guardarLocal();
+  aviso(`Espécimen ${S.tubo} terminado · Tab para el siguiente`);
+});
+video.addEventListener('pause', () => refrescar());
 
 function elegirTubo(e) {
   S.tubo = e;
-  document.querySelectorAll('#tubos button').forEach(b => b.classList.toggle('sel', +b.dataset.e === e));
-  document.querySelectorAll('#tlLabs div').forEach(d => d.classList.toggle('act', +d.dataset.e === e));
-  $('#lblZoom').textContent = `Tubo ${e}`;
-  ubicarFoco(); refrescar(); dibujar(); guardarLocal();
+  pintar(); guardarLocal();
 }
 
 /* ---------------- foco ---------------- */
@@ -481,18 +571,20 @@ function ubicarFoco() {
   const spot = $('#spot'), velos = document.querySelectorAll('.velo'), g = cajaActual();
   if (!g || !video.videoWidth) { spot.style.display = 'none'; velos.forEach(v => v.style.display = 'none'); return; }
   const st = $('#stage').getBoundingClientRect();
+  const bw = 2;  // borde del escenario: el video vive dentro
+  const W0 = st.width - 2 * bw, H0 = st.height - 2 * bw;
   const vw = video.videoWidth, vh = video.videoHeight;
-  const k = Math.min(st.width / vw, st.height / vh);
-  const ox = (st.width - vw * k) / 2, oy = (st.height - vh * k) / 2;
+  const k = Math.min(W0 / vw, H0 / vh);
+  const ox = (W0 - vw * k) / 2, oy = (H0 - vh * k) / 2;
   const x0 = Math.max(0, g.x0), x1 = Math.min(vw, g.x1), y0 = Math.max(0, g.y0), y1 = Math.min(vh, g.y1);
   const L = ox + x0 * k, T = oy + y0 * k, W = (x1 - x0) * k, H = (y1 - y0) * k;
   Object.assign(spot.style, {display: 'block', left: L + 'px', top: T + 'px', width: W + 'px', height: H + 'px'});
-  const cajas = [[0, 0, st.width, T], [0, T + H, st.width, st.height - T - H], [0, T, L, H], [L + W, T, st.width - L - W, H]];
+  const cajas = [[0, 0, W0, T], [0, T + H, W0, H0 - T - H], [0, T, L, H], [L + W, T, W0 - L - W, H]];
   velos.forEach((v, i) => {
     const [x, y, w, h] = cajas[i];
     Object.assign(v.style, {display: 'block', left: x + 'px', top: y + 'px', width: Math.max(0, w) + 'px', height: Math.max(0, h) + 'px'});
   });
-  $('#spotTxt').textContent = `Tubo ${S.tubo}`;
+  $('#spotTxt').textContent = `Espécimen ${S.tubo}`;
 }
 
 /* ---------------- lineas de tiempo (canvas) ---------------- */
@@ -506,110 +598,152 @@ function prepCanvas(cv, alto) {
   ctx.clearRect(0, 0, w, alto);
   return [ctx, w];
 }
-function colorSeg(L, s) {
-  if (S.ciego && !L.h[s]) return null;
-  return COLOR[L.c[s]] || COLOR[''];
-}
+// En "desde cero" no se pinta nada que no hayas marcado tu
+const oculto = (L, s) => S.ciego && !L.h[s];
 
 function dibujar() {
   if (!S.N) return;
   const t = video.currentTime;
-  // --- linea completa, un renglon por tubo ---
-  const cv = $('#cvMain'), fila = 20, alto = fila * S.tubos.length;
-  const [ctx, w] = prepCanvas(cv, alto);
+  // --- linea completa, un renglon por especimen ---
+  const alto = FILA * S.tubos.length;
+  const [ctx, w] = prepCanvas($('#cvMain'), alto);
   const px = w / S.N;
   S.tubos.forEach((e, i) => {
-    const L = S.L[e], y = i * fila;
-    ctx.fillStyle = '#1c242e'; ctx.fillRect(0, y + 2, w, fila - 4);
+    const L = S.L[e], y = i * FILA;
+    ctx.fillStyle = C.n200; ctx.fillRect(0, y + 3, w, FILA - 6);
     for (let s = 0; s < S.N; s++) {
-      const col = colorSeg(L, s);
-      if (!col) continue;
-      ctx.globalAlpha = L.v[s] ? 1 : (L.d[s] ? 0.22 : 0.4);
-      ctx.fillStyle = col;
-      ctx.fillRect(s * px, y + 3, Math.max(px - (px > 3 ? 0.5 : 0), 0.6), fila - 6);
+      if (oculto(L, s)) continue;
+      ctx.globalAlpha = L.v[s] ? 1 : (L.d[s] ? 0.22 : 0.45);
+      ctx.fillStyle = fillDe(ctx, L.c[s]);
+      ctx.fillRect(s * px, y + 3, Math.max(px, 0.6) + 0.3, FILA - 6);
     }
     ctx.globalAlpha = 1;
-    if (e === S.tubo) { ctx.strokeStyle = '#f5c542'; ctx.lineWidth = 1.5; ctx.strokeRect(0.75, y + 1.5, w - 1.5, fila - 3); }
+    if (e === S.tubo) { ctx.strokeStyle = C.a300; ctx.lineWidth = 2; ctx.strokeRect(1, y + 2, w - 2, FILA - 4); }
   });
-  ctx.fillStyle = '#fff'; ctx.fillRect(t / S.N * w - 1, 0, 2, alto);
+  ctx.fillStyle = C.ink; ctx.fillRect(t / S.N * w - 1, 0, 2, alto);
 
-  // --- lupa: ZOOM_S segundos alrededor del cabezal, solo el tubo actual ---
+  // --- lupa: ZOOM_S segundos alrededor del cabezal; la franja de arriba marca lo corregido ---
   if (!S.tubo) return;
-  const cz = $('#cvZoom'), az = 46;
-  const [cx, wz] = prepCanvas(cz, az);
-  const L = S.L[S.tubo];
-  const ini = Math.max(0, Math.min(S.N - ZOOM_S, t - ZOOM_S / 2));
-  const pz = wz / ZOOM_S;
+  const az = 52, [cz, wz] = prepCanvas($('#cvZoom'), az), L = S.L[S.tubo];
+  const ini = Math.max(0, Math.min(S.N - ZOOM_S, t - ZOOM_S / 2)), pz = wz / ZOOM_S;
+  cz.font = '11px Archivo, system-ui'; cz.textAlign = 'left';
   for (let s = Math.floor(ini); s < Math.min(S.N, ini + ZOOM_S + 1); s++) {
-    const x = (s - ini) * pz, col = colorSeg(L, s);
-    cx.globalAlpha = L.v[s] ? 1 : 0.45;
-    cx.fillStyle = col || '#1c242e';
-    cx.fillRect(x + 1, 4, pz - 2, 26);
-    if (L.h[s] && !S.ciego) { cx.globalAlpha = 1; cx.fillStyle = '#fff'; cx.fillRect(x + 1, 4, pz - 2, 3); }
-    cx.globalAlpha = 1;
-    if (s % 5 === 0) {
-      cx.fillStyle = '#8b98a6'; cx.font = '11px system-ui'; cx.textAlign = 'left';
-      cx.fillText(mmss(s), x + 2, 43);
-      cx.fillRect(x, 30, 1, 4);
+    const x = (s - ini) * pz;
+    if (oculto(L, s)) { cz.fillStyle = C.n200; cz.fillRect(x + 1, 6, pz - 2, 26); }
+    else {
+      cz.globalAlpha = L.v[s] ? 1 : (L.d[s] ? 0.22 : 0.45);
+      cz.fillStyle = fillDe(cz, L.c[s]); cz.fillRect(x + 1, 6, pz - 2, 26);
+      cz.globalAlpha = 1;
+      if (!S.ciego && L.h[s] && L.c[s] !== L.p[s]) { cz.fillStyle = C.a300; cz.fillRect(x + 1, 0, pz - 2, 4); }
     }
+    if (s % 5 === 0) { cz.fillStyle = C.ink; cz.fillRect(x, 33, 1, 5); cz.fillStyle = 'rgba(35,31,32,.6)'; cz.fillText(mmss(s), x + 2, 49); }
   }
-  const xh = (t - ini) * pz;
-  cx.fillStyle = '#fff'; cx.fillRect(xh - 1, 0, 2, 34);
+  cz.fillStyle = C.ink; cz.fillRect((t - ini) * pz - 1, 0, 2, 38);
 }
 
 function clicLinea(ev, zoom) {
-  const cv = ev.currentTarget, r = cv.getBoundingClientRect(), x = ev.clientX - r.left;
+  if (!S.N) return;
+  const r = ev.currentTarget.getBoundingClientRect(), x = ev.clientX - r.left;
   if (zoom) {
     const t = video.currentTime, ini = Math.max(0, Math.min(S.N - ZOOM_S, t - ZOOM_S / 2));
     ir(Math.floor(ini + x / r.width * ZOOM_S) + 0.02);
   } else {
-    const i = Math.floor((ev.clientY - r.top) / 20);
-    if (S.tubos[i] !== undefined && S.tubos[i] !== S.tubo) elegirTubo(S.tubos[i]);
+    const e = S.tubos[Math.floor((ev.clientY - r.top) / FILA)];
+    if (e !== undefined && e !== S.tubo) elegirTubo(e);
     ir(Math.floor(x / r.width * S.N) + 0.02);
   }
 }
 
-/* ---------------- interfaz ---------------- */
-function totales(e) {
-  const out = {nado: 0, inmovilidad: 0, escalamiento: 0, activa: 0, '': 0};
-  for (const c of S.L[e].c) out[c in out ? c : '']++;
-  return out;
+/* ---------------- paneles ---------------- */
+function cuenta(arr) {
+  const o = {nado: 0, inmovilidad: 0, escalamiento: 0, activa: 0, '': 0};
+  for (const c of arr) o[c in o ? c : '']++;
+  return o;
 }
+const totales = e => cuenta(S.L[e].c);
+
+// Lo que cambia a cada segundo: cabecera del video, "Ahora", botones
 function refrescar() {
   if (!S.tubo) return;
-  const L = S.L[S.tubo], s = segActual();
-  const vistos = L.v.reduce((a, b) => a + b, 0);
-  $('#progTxt').textContent = `${Math.round(100 * vistos / S.N)}% visto`;
-  $('#progFill').style.width = (100 * vistos / S.N) + '%';
-  const tot = totales(S.tubo);
-  $('#totales').innerHTML = S.ciego && !L.h.some(x => x) ? '' :
-    CLASES.map(c => `<div class="chip"><i style="background:${COLOR[c]}"></i><b>${tot[c]}</b> s</div>`).join('');
-  $('#info').innerHTML = `Tubo ${S.tubo} · ${mmss(s)}<span class="t">segundo ${s + 1} de ${S.N} · ${video.playbackRate}×</span>`;
-  const c = L.c[s];
-  const oculto = S.ciego && !L.h[s];
-  $('#ahoraVal').textContent = oculto ? '—' : NOMBRE[c];
-  $('#ahoraVal').style.color = oculto ? 'var(--muted)' : (COLOR[c] === COLOR[''] ? 'var(--muted)' : COLOR[c]);
-  $('#ahoraSrc').textContent = oculto ? 'sin marcar' : L.h[s] ? 'lo marcaste tú' : L.d[s] ? 'propuesta dudosa' : 'propuesta';
-  document.querySelectorAll('.cls').forEach(b => b.classList.toggle('ahora', !oculto && b.dataset.c === c));
+  const L = S.L[S.tubo], s = segActual(), c = L.c[s], oc = oculto(L, s);
+  $('#info').innerHTML = `<span class="nd">${mmss(s)}</span> / ${mmss(S.N)} · segundo ${s + 1} de ${S.N} · ${video.playbackRate}×`;
+  $('#pausa').hidden = !video.paused;
+  $('#btnPlay').textContent = video.paused ? 'Reproducir' : 'Pausar';
+  $('#ahoraVal').innerHTML = oc ? '<span style="color:var(--muted)">—</span>'
+    : sw(c) + `<span${c === '' ? ' style="color:var(--muted)"' : ''}>${NOMBRE[c]}</span>`;
+  $('#ahoraSrc').textContent = oc ? 'Sin marcar'
+    : L.h[s] && !S.ciego && c !== L.p[s] ? `Corregido · la propuesta era ${NOMBRE[L.p[s]].toLowerCase()}`
+    : L.h[s] ? 'Lo marcaste tú'
+    : L.d[s] ? 'Propuesta dudosa · mírala con cuidado'
+    : `Propuesta · ${FUENTE[S.fuente]}`;
+  document.querySelectorAll('.cls').forEach(b => b.classList.toggle('ahora', !oc && b.dataset.c === c));
+  const vis = L.v.reduce((a, b) => a + b, 0);
+  $('#meter').style.width = (100 * vis / S.N) + '%';
+  $('#pctVisto').textContent = Math.round(100 * vis / S.N) + ' %';
+}
+
+// Lo que cambia al etiquetar o al cambiar de especimen
+function pintar() {
+  if (!S.tubo) return;
+  const L = S.L[S.tubo];
+  $('#tabs').innerHTML = S.tubos.map(e => {
+    const vis = Math.round(100 * S.L[e].v.reduce((a, b) => a + b, 0) / S.N);
+    return `<button type="button" class="tab${e === S.tubo ? ' on' : ''}" data-e="${e}">Espécimen ${e}<small class="num">${vis} % visto</small></button>`;
+  }).join('');
+  $('#tlLabs').innerHTML = S.tubos.map(e => `<div class="${e === S.tubo ? 'act' : ''}">Espécimen ${e}</div>`).join('');
+
+  $('#lblTot').textContent = `Segundos por conducta · espécimen ${S.tubo}`;
+  $('#colProp').hidden = S.ciego;
+  const a = cuenta(L.p), b = cuenta(L.c);
+  const sinMarcar = S.ciego ? L.h.reduce((n, x) => n + (x ? 0 : 1), 0) : 0;
+  $('#totales').innerHTML = CLASES.concat(['']).map(k => {
+    const ahora = S.ciego && k === '' ? b[k] - sinMarcar : b[k];
+    return `<div class="tot-row" style="padding:6px 0;border-bottom:1px solid var(--color-divider);font-size:12px">` +
+      `<span style="display:flex;align-items:center;gap:8px">${sw(k)}${NOMBRE[k]}</span>` +
+      (S.ciego ? '<span></span>' : `<span class="num" style="text-align:right;color:var(--muted)">${a[k]} s</span>`) +
+      `<span class="num nd" style="text-align:right;min-width:42px;${!S.ciego && a[k] !== b[k] ? 'color:var(--color-accent-700)' : ''}">${ahora} s</span>` +
+      `</div>`;
+  }).join('') + (S.ciego ? `<div class="hint" style="margin-top:6px">${sinMarcar} s sin marcar todavía</div>` : '');
+
+  const agrupado = S.tubos.some(e => S.L[e].c.some((c, s) => c === 'activa' && !oculto(S.L[e], s)));
+  $('#nivel').textContent = agrupado ? 'Agrupado' : 'Preciso (3 conductas)';
+  $('#nivelTxt').innerHTML = agrupado
+    ? 'Al menos un segundo quedó como <strong>conducta activa</strong>: esos segundos solo cuentan para inmóvil contra activa (nivel Porsolt).'
+    : 'Ningún segundo está como conducta activa. Si marcas alguno, ese video pasa a nivel <strong>agrupado</strong> en esos segundos.';
+
+  const n = S.tubos.reduce((x, e) => x + corregidos(e), 0), conCorr = S.tubos.filter(e => corregidos(e)).length;
+  const marcados = S.tubos.reduce((x, e) => x + S.L[e].h.reduce((m, y) => m + y, 0), 0);
+  $('#estadoBar').innerHTML = S.guardado
+    ? '<div class="ok-bar"><strong>Hoja guardada.</strong> Muévela a <code>etiquetas/</code> si el navegador la dejó en Descargas. Tu avance sigue en este navegador por si quieres continuar.</div>'
+    : marcados
+      ? `<div class="note-bar" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><span style="flex:1">` +
+        (S.ciego ? `<strong>Sin guardar</strong> · ${marcados} ${marcados === 1 ? "segundo marcado" : "segundos marcados"}.`
+                 : `<strong>Sin guardar</strong> · ${n} ${n === 1 ? 'segundo corregido' : 'segundos corregidos'} en ${conCorr} ${conCorr === 1 ? 'espécimen' : 'especímenes'}.`) +
+        ' El avance vive en este navegador hasta que guardes la hoja.</span>' +
+        '<button type="button" class="linkbtn" id="btnDescartar" style="font-size:12px">Descartar lo que llevo</button></div>'
+      : `<div class="hint">${S.ciego ? 'Desde cero: ningún segundo trae etiqueta. Marca la conducta al empezar y en cada cambio.'
+           : `Cada segundo ya trae una propuesta (${FUENTE[S.fuente]}). Se revisa un espécimen a la vez; al terminar, guarda la hoja.`}</div>`;
+
+  ubicarFoco(); refrescar(); dibujar();
 }
 
 function golpe(el) { if (!el) return; el.classList.remove('hit'); void el.offsetWidth; el.classList.add('hit'); }
 let tAviso = 0;
-function aviso(txt, color) {
+function aviso(txt) {
   const t = $('#toast');
-  t.textContent = txt; t.style.color = color; t.style.borderColor = color;
-  t.classList.add('on'); clearTimeout(tAviso);
-  tAviso = setTimeout(() => t.classList.remove('on'), 800);
+  t.textContent = txt; t.classList.add('on'); clearTimeout(tAviso);
+  tAviso = setTimeout(() => t.classList.remove('on'), 900);
 }
 
 /* ---------------- resumen y exportar ---------------- */
 function mostrarResumen() {
+  if (!S.N || !S.tubo) return;
   const filas = S.tubos.map(e => {
     const t = totales(e), L = S.L[e], vistos = L.v.reduce((a, b) => a + b, 0);
-    return `<tr><td>Tubo ${e}</td>${CLASES.map(c => `<td>${t[c]}</td>`).join('')}<td>${t['']}</td>` +
-           `<td>${Math.round(100 * vistos / S.N)}%</td></tr>`;
+    return `<tr><td class="nd" style="white-space:nowrap">Espécimen ${e}</td>${CLASES.map(c => `<td>${t[c]}</td>`).join('')}<td>${t['']}</td>` +
+           `<td>${Math.round(100 * vistos / S.N)} %</td></tr>`;
   }).join('');
-  $('#resTabla').innerHTML = `<tr><th></th>${CLASES.map(c => `<th style="color:${COLOR[c]}">${NOMBRE[c]}</th>`).join('')}` +
+  $('#resTabla').innerHTML = `<tr><th></th>${CLASES.map(c => `<th>${NOMBRE[c]}</th>`).join('')}` +
     `<th>Sin decidir</th><th>Visto</th></tr>` + filas;
   $('#resTxt').textContent = `Segundos de cada conducta en los ${S.N} s del video. ` +
     'Solo cuenta como revisado lo que viste a 2× o más lento.';
@@ -637,20 +771,22 @@ function construirHoja() {
 }
 
 async function guardarHoja() {
+  if (!S.N || !S.tubo) return;
   const nombre = `${S.csvVideo || S.videoName}_seg.csv`;
   const blob = new Blob([construirHoja()], {type: 'text/csv;charset=utf-8'});
   if (window.showSaveFilePicker) {
     try {
       const h = await showSaveFilePicker({suggestedName: nombre, types: [{description: 'Hoja CSV', accept: {'text/csv': ['.csv']}}]});
       const w = await h.createWritable(); await w.write(blob); await w.close();
-      aviso('✓ Guardado', '#2fd27c'); return;
+      S.guardado = true; pintar(); aviso('Guardado'); return;
     } catch (err) { if (err.name === 'AbortError') return; }
   }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = nombre;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  aviso('✓ Descargado · muévelo a etiquetas/', '#2fd27c');
+  S.guardado = true; pintar();
+  aviso('Descargado · muévelo a etiquetas/');
 }
 
 /* ---------------- inicio ---------------- */
@@ -672,9 +808,9 @@ function revisarListo() {
   // Mientras no elijas tu, se propone la mejor disponible: los archivos llegan
   // en cualquier orden y la primera que aparece no tiene por que ser la mejor.
   if (!S.fuenteElegida || !f.some(x => x[0] === S.fuente)) S.fuente = f[0][0];
-  $('#fuentes').hidden = !S.bloques.size;
+  $('#fuentes').hidden = $('#lblFuentes').hidden = !S.bloques.size;
   $('#fuentes').innerHTML = f.map(([k, t, d]) =>
-    `<button class="fuente${k === S.fuente ? ' sel' : ''}" data-f="${k}"><b>${t}</b><span>${d}</span></button>`).join('');
+    `<button type="button" class="fuente${k === S.fuente ? ' sel' : ''}" data-f="${k}"><b>${t}</b><span>${d}</span></button>`).join('');
   document.querySelectorAll('.fuente').forEach(b => b.addEventListener('click', () => {
     S.fuente = b.dataset.f; S.fuenteElegida = true; revisarListo();
   }));
@@ -715,7 +851,16 @@ function ponerVideo(src, nombre) {
     revisarListo();
   };
   video.onerror = () => { marcar('video', false, `${nombre} · este navegador no lo reproduce; prueba Chrome o Edge`); revisarListo(); };
-  $('#nomVideo').textContent = S.videoName;
+}
+
+function ejeTiempo() {
+  // una marca por minuto; con videos cortos, cada 30 s
+  const paso = S.N > 150 ? 60 : 30, marcas = [];
+  for (let s = 0; s <= S.N; s += paso) {
+    const x = 100 * s / S.N, ancla = s === 0 ? '0' : x > 96 ? '-100%' : '-50%';
+    marcas.push(`<span style="position:absolute;left:${x}%;transform:translateX(${ancla})">${mmss(s)}</span>`);
+  }
+  $('#eje').innerHTML = marcas.join('');
 }
 
 function empezar() {
@@ -736,25 +881,36 @@ function empezar() {
     if (S.tubos.includes(prev.tubo)) tubo = prev.tubo;
     t0 = prev.t || 0;
   }
-  $('#tubos').innerHTML = S.tubos.map(e => `<button data-e="${e}">Tubo ${e}</button>`).join('');
-  document.querySelectorAll('#tubos button').forEach(b => b.addEventListener('click', () => elegirTubo(+b.dataset.e)));
-  $('#tlLabs').innerHTML = S.tubos.map(e => `<div class="lbl" data-e="${e}">Tubo ${e}</div>`).join('');
+  const nom = S.csvVideo || S.videoName;
+  $('#crumbVideo').textContent = nom;
+  $('#tituloVideo').textContent = ` · ${nom}`;
+  $('#subtitulo').textContent = `${S.tubos.length} especímenes · ${mmss(S.N)} de video (${S.N} s) · empieza con ${FUENTE[S.fuente]}`;
+  $('#lblAhora').textContent = S.ciego ? 'Ahora (tú)' : 'Ahora';
+  ejeTiempo();
   $('#inicio').hidden = true;
-  $('#ahora').querySelector('.lab').textContent = S.ciego ? 'Ahora (tú)' : 'Ahora';
-  elegirTubo(tubo);
+  S.tubo = tubo;
   ir(t0);
-  $('#pausado').hidden = false;
-  aviso(S.ciego ? 'Desde cero: marca la conducta al empezar y en cada cambio' : 'Espacio para empezar', '#f5c542');
+  pintar();
+  aviso(S.ciego ? 'Desde cero: marca la conducta al empezar y en cada cambio' : 'Espacio para empezar');
 }
 
 /* ---------------- eventos ---------------- */
 document.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTimeout(() => b.blur(), 0); }, true);
 document.querySelectorAll('.cls').forEach(b => b.addEventListener('click', () => aplicar(b.dataset.c, b)));
-document.querySelectorAll('#vel button').forEach(b => b.addEventListener('click', () => {
-  video.playbackRate = +b.dataset.v;
-  document.querySelectorAll('#vel button').forEach(x => x.classList.toggle('sel', x === b));
+$('#tabs').addEventListener('click', e => {
+  const t = e.target.closest('.tab');
+  if (!t) return;
+  if (!video.paused) pausa();
+  elegirTubo(+t.dataset.e);
+});
+$('#vel').addEventListener('click', e => {
+  const o = e.target.closest('.seg-opt');
+  if (!o) return;
+  document.querySelectorAll('#vel .seg-opt').forEach(x => x.classList.toggle('on', x === o));
+  video.playbackRate = +o.dataset.v;
   refrescar();
-}));
+});
+$('#btnPlay').addEventListener('click', pausa);
 $('#cvMain').addEventListener('click', e => clicLinea(e, false));
 $('#cvZoom').addEventListener('click', e => clicLinea(e, true));
 $('#btnGuardar').addEventListener('click', guardarHoja);
@@ -767,12 +923,20 @@ $('#reiniciar').addEventListener('click', () => {
   try { localStorage.removeItem(claveLocal()); } catch (err) { /* nada */ }
   revisarListo();
 });
+$('#estadoBar').addEventListener('click', e => {
+  if (e.target.id !== 'btnDescartar') return;
+  if (!confirm('¿Descartar todo lo que marcaste y volver a la propuesta inicial?')) return;
+  if (!video.paused) pausa();
+  try { localStorage.removeItem(claveLocal()); } catch (err) { /* nada */ }
+  construirEtiquetas(); S.hist = []; S.guardado = false;
+  ir(0); pintar();
+});
 $('#pick').addEventListener('click', () => $('#inFiles').click());
 $('#inFiles').addEventListener('change', e => tomarArchivos(e.target.files));
 const drop = $('#drop');
 ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
-drop.addEventListener('drop', e => tomarArchivos(e.dataTransfer.files));
+drop.addEventListener('drop', e => { e.stopPropagation(); tomarArchivos(e.dataTransfer.files); });
 window.addEventListener('dragover', e => e.preventDefault());
 window.addEventListener('drop', e => { e.preventDefault(); if (!$('#inicio').hidden) tomarArchivos(e.dataTransfer.files); });
 
@@ -781,7 +945,7 @@ window.addEventListener('keydown', e => {
   if (!$('#inicio').hidden) { if (e.key === 'Enter' && !$('#btnEmpezar').disabled) empezar(); return; }
   if (!$('#resumen').hidden) { if (e.key === 'Escape') $('#resumen').hidden = true; return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); deshacer(); return; }
-  if (e.repeat) return;
+  if (e.repeat || e.ctrlKey || e.metaKey) return;
   const k = e.key;
   if (k in TECLA) aplicar(TECLA[k], document.querySelector(`.cls[data-c="${TECLA[k]}"]`));
   else if (k === ' ') { e.preventDefault(); pausa(); }
@@ -791,9 +955,9 @@ window.addEventListener('keydown', e => {
   else if (k === 'Tab') {
     e.preventDefault();
     const i = S.tubos.indexOf(S.tubo), n = S.tubos.length;
+    if (!video.paused) pausa();
     elegirTubo(S.tubos[(i + (e.shiftKey ? n - 1 : 1)) % n]);
     ir(0);
-    if (!video.paused) pausa();
   }
 });
 window.addEventListener('resize', () => { ubicarFoco(); dibujar(); });
