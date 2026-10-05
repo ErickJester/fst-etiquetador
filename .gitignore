@@ -28,3 +28,6 @@ revision/
 # Viven en Google Drive, no aqui. Lo mismo las redes entrenadas.
 clips/
 *.pt
+
+# Copias locales antes de regenerar (git ya guarda las versiones anteriores)
+respaldo/

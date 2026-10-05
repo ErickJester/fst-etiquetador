@@ -280,5 +280,11 @@ Fase 2 hecha (sin etiquetar a mano por segundo):
   ventana 4 s (`segundos.py validar`): exactitud 0.885, kappa +0.794, F1
   esc 0.80 / inm 0.87 / nado 0.91; 48% de los bloques tienen mas de una
   conducta. Ventana 3 s falla porque con --paso 12 son ~7 mediciones.
-- Para tener `_cuadros.csv` de los 14 videos viejos hay que pasarlos otra vez
-  por etiquetar.py (~9 min cada uno). Los `_mano.csv` no se tocan.
+- 2026-10-04: los 15 videos con `_mano.csv` ya tienen `_cuadros.csv` y
+  `_segundos.csv` (~4-5 min por video tras el cambio de `_Video.cuadros` en
+  lib.py, verificado identico en AcuN1). Geometria igual a la de antes (0 px),
+  rasgos con diferencias < 0.005. Rasgos previos en `respaldo/rasgos_2026-10-04/`.
+  `segundos.py validar` probando los 15 (cada uno con modelo que no lo vio):
+  exactitud 0.910, kappa +0.830, F1 esc 0.82 / inm 0.90 / nado 0.93.
+  OJO: sigue siendo mayoria por bloque contra el bloque humano. NO hay
+  ninguna medida segundo contra segundo: no existe ningun `_seg.csv` humano.
