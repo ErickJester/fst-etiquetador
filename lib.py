@@ -85,6 +85,23 @@ class _Video:
             fr = cv2.rotate(fr, _GIRO[self.rot])
         return ok, fr
 
+    def cuadros(self, quiero):
+        """Recorre el video y devuelve (indice, fotograma) solo de los que
+        `quiero(indice)` acepta. Los demas se saltan con grab(), sin pasarlos
+        a imagen: cuesta la mitad por fotograma y los que se quedan son los
+        mismos pixeles que con read()."""
+        cur = -1
+        while self.cap.grab():
+            cur += 1
+            if not quiero(cur):
+                continue
+            ok, fr = self.cap.retrieve()
+            if not ok:
+                break
+            if self.rot:
+                fr = cv2.rotate(fr, _GIRO[self.rot])
+            yield cur, fr
+
     def __getattr__(self, nombre):          # set, get, release, isOpened...
         return getattr(self.cap, nombre)
 
@@ -162,14 +179,8 @@ def registrar(ruta, paso=2, ref_frac=0.5, log=print):
     kr, dr = orb.detectAndCompute(prep(fr), None)
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
-    lut, fallos, cur = {}, 0, -1
-    while True:
-        ok, f = cap.read()
-        if not ok:
-            break
-        cur += 1
-        if cur % paso:
-            continue
+    lut, fallos = {}, 0
+    for cur, f in cap.cuadros(lambda c: c % paso == 0):
         kq, dq = orb.detectAndCompute(prep(f), None)
         M = None
         if dq is not None and len(kq) > 12:
@@ -195,14 +206,7 @@ def registrar(ruta, paso=2, ref_frac=0.5, log=print):
 def _alineados(ruta, lut, WH, cada):
     W, H = WH
     cap = abrir(ruta)
-    cur = -1
-    while True:
-        ok, fr = cap.read()
-        if not ok:
-            break
-        cur += 1
-        if cur not in lut or cur % cada:
-            continue
+    for cur, fr in cap.cuadros(lambda c: c in lut and c % cada == 0):
         g = cv2.cvtColor(fr, cv2.COLOR_BGR2GRAY)
         yield cur, cv2.warpAffine(g, lut[cur], (W, H),
                                   flags=cv2.INTER_LINEAR, borderValue=0)
@@ -216,15 +220,27 @@ def fondo_y_ocupacion(ruta, lut, WH, fps, log=print):
     percentil bajo la borra y deja el aparato vacio. La mediana NO sirve,
     un animal quieto se queda incrustado dentro del fondo."""
     cada = max(1, int(round(fps)))
-    pila = [w for _, w in _alineados(ruta, lut, WH, cada)]
+    guardados = dict(_alineados(ruta, lut, WH, cada))
+    pila = list(guardados.values())
     if len(pila) < 10:
         raise RuntimeError('video demasiado corto para modelar el fondo')
     fondo = np.percentile(np.stack(pila), 10, axis=0).astype(np.uint8)
     log('    fondo con %d fotogramas' % len(pila))
 
+    # Con --paso 12 y 30 o 60 fps, la ocupacion pide justo los mismos
+    # fotogramas que el fondo: se reusan en vez de leer el video otra vez.
+    # Mismo orden, asi que la suma sale identica. Si faltan (p. ej. 25 fps),
+    # se lee el video como antes.
+    cada_occ = max(1, cada // 3)
+    pedidos = [c for c in sorted(lut) if c % cada_occ == 0]
+    if all(c in guardados for c in pedidos):
+        fuente = ((c, guardados[c]) for c in pedidos)
+    else:
+        fuente = _alineados(ruta, lut, WH, cada_occ)
+
     bg = fondo.astype(np.int16)
     acc, n = np.zeros(fondo.shape, np.float32), 0
-    for _, w in _alineados(ruta, lut, WH, max(1, cada // 3)):
+    for _, w in fuente:
         wi = w.astype(np.int16)
         acc += ((wi - bg) > DIFF_THR) & (wi > BRIGHT_THR)
         n += 1
@@ -396,14 +412,7 @@ def extraer(ruta, lut, WH, fondo, g, fps, log=print):
     from collections import deque
     filas, hist = [], {}
     cap = abrir(ruta)
-    cur = -1
-    while True:
-        ok, fr = cap.read()
-        if not ok:
-            break
-        cur += 1
-        if cur not in lut:
-            continue
+    for cur, fr in cap.cuadros(lambda c: c in lut):
         gr = cv2.cvtColor(fr, cv2.COLOR_BGR2GRAY)
         w = cv2.warpAffine(gr, lut[cur], (W, H), flags=cv2.INTER_LINEAR,
                            borderValue=0)
