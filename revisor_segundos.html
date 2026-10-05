@@ -20,7 +20,7 @@
   correcta: cambia desde ese segundo hasta el siguiente cambio de color.
 
   Teclas:  1 nado  2 inmovilidad  3 escalamiento  4 conducta activa  0 no se ve
-           Espacio pausa   <- -> un segundo   Shift+<- -> cinco segundos
+           Espacio pausa   <- -> un segundo   Shift+<- -> cinco segundos   Arriba/Abajo bloque de 5 s anterior/siguiente
            R vuelve 3 s    Tab siguiente especimen   Ctrl+Z deshacer   Ctrl+S guardar
 
   Pausado, una tecla cambia SOLO el segundo donde estas: sirve para corregir
@@ -59,7 +59,7 @@ code{font-size:12px;background:var(--color-surface);padding:0 4px}
 .k{font-family:var(--font-heading);font-weight:800;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .hint{font-size:11.5px;line-height:1.6;color:color-mix(in srgb,var(--color-text) 60%,transparent)}
 
-.app{max-width:1240px;margin:0 auto;min-height:100vh;background:var(--color-bg);border-left:2px solid var(--color-text);border-right:2px solid var(--color-text)}
+.app{max-width:1800px;margin:0 auto;min-height:100vh;background:var(--color-bg);border-left:2px solid var(--color-text);border-right:2px solid var(--color-text)}
 .page{padding:28px 32px 36px}
 .nav{display:flex;align-items:center;gap:16px;padding:12px 16px;border-bottom:2px solid var(--color-divider)}
 .nav-brand{font-family:var(--font-heading);font-weight:800;font-size:18px}
@@ -100,7 +100,7 @@ code{font-size:12px;background:var(--color-surface);padding:0 4px}
 .sw.nove{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--color-text) 18%,transparent) 0 2px,transparent 2px 5px)}
 
 /* escenario: el video con el tubo destacado */
-.stage{position:relative;height:clamp(320px,56vh,620px);background:#16181a;overflow:hidden;border:2px solid var(--color-text)}
+.stage{position:relative;height:clamp(360px,68vh,900px);background:#16181a;overflow:hidden;border:2px solid var(--color-text)}
 #video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;z-index:0}
 .velo,.spot,.badge,.pausa,.toast{z-index:1}
 .velo{position:absolute;background:rgba(0,0,0,.6);pointer-events:none;display:none}
@@ -135,8 +135,12 @@ kbd{font-family:var(--font-body);font-size:11px;font-weight:700;padding:0 5px;bo
 .capa{position:fixed;inset:0;display:grid;place-items:center;padding:16px;z-index:50;background:color-mix(in srgb,var(--color-neutral-900) 50%,transparent)}
 .dialog{width:min(680px,100%);max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:28px;background:var(--color-bg);border:2px solid var(--color-text);box-shadow:var(--shadow-lg)}
 .dialog p{font-size:13px;color:var(--muted-2)}
-#drop{border:2px dashed var(--color-divider);padding:22px;text-align:center;background:var(--color-surface)}
-#drop.over{border-color:var(--color-accent);background:var(--color-accent-100)}
+#slots{display:grid;gap:8px}
+.slot{display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center;border:2px dashed var(--color-divider);padding:10px 14px;background:var(--color-surface)}
+.slot b{font-family:var(--font-heading);font-weight:800;font-size:14px}
+.slot span{color:var(--muted);font-size:12px;grid-column:1}
+.slot button{grid-column:2;grid-row:1 / span 2}
+.slot.over{border-color:var(--color-accent);background:var(--color-accent-100)}
 .estado{display:grid;gap:4px;font-size:12.5px}
 .estado .ok{color:var(--color-text)} .estado .no{color:var(--muted)} .estado .mal{color:var(--color-accent)}
 #fuentes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -181,8 +185,8 @@ kbd{font-family:var(--font-body);font-size:11px;font-weight:700;padding:0 5px;bo
 
     <div id="tabs" style="display:flex;flex-wrap:wrap;border-bottom:2px solid var(--color-divider);margin:18px 0 20px"></div>
 
-    <div class="cuerpo" style="display:grid;grid-template-columns:1fr 300px;gap:2px;background:var(--color-divider)">
-      <div style="background:var(--color-bg);padding-right:24px;min-width:0">
+    <div class="cuerpo" style="display:grid;grid-template-columns:1fr">
+      <div style="background:var(--color-bg);min-width:0">
         <div class="stage" id="stage">
           <video id="video" muted playsinline preload="auto"></video>
           <div class="velo"></div><div class="velo"></div><div class="velo"></div><div class="velo"></div>
@@ -207,7 +211,14 @@ kbd{font-family:var(--font-body);font-size:11px;font-weight:700;padding:0 5px;bo
           </div>
         </div>
 
-        <div class="botones" style="display:flex;gap:8px;margin-top:18px">
+        <div style="display:flex;align-items:center;gap:14px;margin-top:18px;flex-wrap:wrap">
+          <span class="k">Cada tecla marca</span>
+          <span class="seg" id="modo">
+            <span class="seg-opt on" data-m="1">1 seg</span><span class="seg-opt" data-m="5">5 seg</span>
+          </span>
+          <span class="hint">1 seg: solo el segundo actual · 5 seg: todo el bloque de 5 s · al revisar los 5 segundos, el bloque toma la conducta mayoritaria</span>
+        </div>
+        <div class="botones" style="display:flex;gap:8px;margin-top:10px">
           <button type="button" class="cls" data-c="nado"><span class="key">1</span><span class="sw nado"></span>Nado activo</button>
           <button type="button" class="cls" data-c="inmovilidad"><span class="key">2</span><span class="sw inmovilidad"></span>Inmovilidad</button>
           <button type="button" class="cls" data-c="escalamiento"><span class="key">3</span><span class="sw escalamiento"></span>Escalamiento</button>
@@ -222,10 +233,10 @@ kbd{font-family:var(--font-body);font-size:11px;font-weight:700;padding:0 5px;bo
           </span>
           <button type="button" class="btn btn-secondary" id="btnPlay" style="min-width:132px">Reproducir</button>
         </div>
-        <p class="hint" style="margin:12px 0 0"><kbd>Espacio</kbd> pausa · <kbd>←</kbd> <kbd>→</kbd> 1 s · <kbd>Shift</kbd>+flecha 5 s · <kbd>R</kbd> vuelve 3 s · <kbd>Tab</kbd> siguiente espécimen · <kbd>Ctrl</kbd>+<kbd>Z</kbd> deshacer · <kbd>Ctrl</kbd>+<kbd>S</kbd> guardar · clic en una línea para ir a ese segundo</p>
+        <p class="hint" style="margin:12px 0 0"><kbd>Espacio</kbd> pausa · <kbd>←</kbd> <kbd>→</kbd> 1 s (← una vez reinicia el segundo, dos veces va al anterior) · <kbd>Shift</kbd>+flecha 5 s · <kbd>↑</kbd> <kbd>↓</kbd> bloque de 5 s (↑ una vez reinicia el bloque, dos veces va al anterior) · <kbd>R</kbd> vuelve 3 s · <kbd>Tab</kbd> siguiente espécimen · <kbd>Ctrl</kbd>+<kbd>Z</kbd> deshacer · <kbd>Ctrl</kbd>+<kbd>S</kbd> guardar · clic en una línea para ir a ese segundo</p>
       </div>
 
-      <div style="background:var(--color-bg);padding-left:24px;display:flex;flex-direction:column;gap:24px">
+      <div hidden style="background:var(--color-bg);padding-left:24px;display:flex;flex-direction:column;gap:24px">
         <div>
           <div class="k" style="margin-bottom:10px" id="lblAhora">Ahora</div>
           <div class="ahora-val" id="ahoraVal">—</div>
@@ -263,11 +274,12 @@ kbd{font-family:var(--font-body);font-size:11px;font-weight:700;padding:0 5px;bo
   <div class="dialog">
     <h3>Revisión segundo a segundo</h3>
     <p>Un espécimen a la vez, con el video corriendo. Cuando <b>Ahora</b> no coincida con lo que ves, pulsa la conducta correcta.</p>
-    <div id="drop">
-      <div class="nd" style="font-size:15px;margin-bottom:6px">Arrastra aquí el video y sus CSV</div>
-      <div class="hint" style="margin-bottom:12px"><code>_rasgos.csv</code> o <code>_cnn.csv</code> (obligatorio) · <code>_mano.csv</code> y <code>_seg.csv</code> (opcionales)</div>
-      <button type="button" class="btn btn-secondary" id="pick">Elegir archivos</button>
-      <input type="file" id="inFiles" multiple accept="video/*,.mov,.MOV,.mp4,.csv" hidden>
+    <div id="slots">
+      <div class="slot" data-acc="video/*,.mov,.MOV,.mp4"><b>1 · Video</b><span>obligatorio</span><button type="button" class="btn btn-secondary">Elegir video</button></div>
+      <div class="slot" data-acc=".csv"><b>2 · Rasgos o CNN</b><span><code>_rasgos.csv</code> o <code>_cnn.csv</code> · obligatorio</span><button type="button" class="btn btn-secondary">Elegir CSV</button></div>
+      <div class="slot" data-acc=".csv"><b>3 · Mano</b><span><code>_mano.csv</code> · opcional</span><button type="button" class="btn btn-secondary">Elegir CSV</button></div>
+      <div class="slot" data-acc=".csv"><b>4 · Segundos</b><span><code>_seg.csv</code> · opcional, para continuar</span><button type="button" class="btn btn-secondary">Elegir CSV</button></div>
+      <input type="file" id="inFiles" hidden>
     </div>
     <div class="estado" id="estado"></div>
     <div id="lblFuentes" class="k" hidden>Con qué empieza cada segundo</div>
@@ -315,6 +327,7 @@ const S = {
   tubos: [], N: 0, csvVideo: '',
   fuente: '', ciego: false,
   L: {},                // esp -> {c: [], p: [], h: Uint8Array, v: Uint8Array, d: Uint8Array}
+  modo: 1,              // 1 = una tecla marca 1 s; 5 = marca el bloque de 5 s
   tubo: null, hist: [], raf: 0, ultimoSeg: -1, guardado: false,
 };
 
@@ -478,6 +491,29 @@ const mmss = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 function segActual() { return segDe(video.currentTime); }
 const corregidos = e => S.L[e].c.reduce((a, c, i) => a + (S.L[e].h[i] && c !== S.L[e].p[i] ? 1 : 0), 0);
 
+/* ---------------- bloque de 5 s por mayoria ---------------- */
+// Con 3 de 5 segundos de una misma conducta, el bloque es esa conducta. Si
+// ninguna llega a 3, todo lo que no es inmovilidad (nado, escalamiento, activa)
+// cuenta junto: empate o mas activos que inmoviles -> conducta activa.
+function mayoria(cs) {
+  const n = {nado: 0, inmovilidad: 0, escalamiento: 0, activa: 0, '': 0};
+  for (const c of cs) n[c in n ? c : '']++;
+  const umbral = Math.floor(cs.length / 2) + 1;
+  for (const k of CLASES.concat([''])) if (n[k] >= umbral) return k;
+  const act = n.nado + n.escalamiento + n.activa;
+  if (!act && !n.inmovilidad) return '';
+  return act >= n.inmovilidad ? 'activa' : 'inmovilidad';
+}
+// null mientras algun segundo del bloque no se haya revisado o marcado
+function claseBloque(L, b) {
+  const a = b * BLOQUE_S, z = Math.min(S.N, a + BLOQUE_S), cs = [];
+  for (let s = a; s < z; s++) {
+    if (!(S.ciego ? L.h[s] : (L.h[s] || L.v[s]))) return null;
+    cs.push(L.c[s]);
+  }
+  return cs.length ? mayoria(cs) : null;
+}
+
 /* ---------------- etiquetar ---------------- */
 // Reproduciendo: desde el segundo en que empezo el cambio hasta donde termina
 // el tramo de ese color. Pausado: solo el segundo actual.
@@ -485,19 +521,20 @@ function aplicar(c, boton) {
   if (!S.tubo) return;
   const L = S.L[S.tubo];
   const corriendo = !video.paused;
-  const s0 = corriendo ? segDe(video.currentTime - REACCION) : segActual();
-  let s1 = s0;
-  if (corriendo) {
-    const viejo = L.c[s0];
-    while (s1 + 1 < S.N && L.c[s1 + 1] === viejo) s1++;
-  }
+  // Modo 1 s: el segundo que se ve. Si se pulsa en los primeros 0.4 s de un
+  // segundo, la intencion era para el anterior: se cubren los dos, porque si no
+  // el segundo en pantalla conserva su conducta vieja y parece que la tecla fallo.
+  // Modo 5 s: el bloque entero que se ve.
+  const sc = corriendo ? segDe(video.currentTime - REACCION) : segActual(), sa = segActual();
+  const s0 = S.modo === 5 ? Math.floor(sa / BLOQUE_S) * BLOQUE_S : sc;
+  const s1 = S.modo === 5 ? Math.min(S.N - 1, s0 + BLOQUE_S - 1) : sa;
   S.hist.push({e: S.tubo, s0, c: L.c.slice(s0, s1 + 1), h: L.h.slice(s0, s1 + 1)});
   if (S.hist.length > 200) S.hist.shift();
   for (let s = s0; s <= s1; s++) { L.c[s] = c; L.h[s] = 1; }
   // lo que ya paso bajo el cabezal cuenta como visto
   for (let s = s0; s <= segActual(); s++) L.v[s] = 1;
   golpe(boton);
-  aviso(`${NOMBRE[c]} · ${corriendo ? `desde ${mmss(s0)}` : `solo ${mmss(s0)}`}`);
+  aviso(`${NOMBRE[c]} · ${S.modo === 5 ? `bloque ${mmss(s0)}–${mmss(s1 + 1)}` : mmss(s0)}`);
   S.guardado = false;
   pintar(); guardarLocal();
 }
@@ -542,6 +579,14 @@ function ir(t) {
   video.currentTime = t + 0.02;
   S.ultimoSeg = segDe(t);
   ubicarFoco(); refrescar(); dibujar();
+}
+// Una pulsacion reinicia la unidad actual (1 s o bloque de 5 s); dos en menos
+// de 400 ms retroceden a la anterior, como el "anterior" de un reproductor.
+const ATRAS = {};
+function atras(u) {
+  const a = ATRAS[u], ahora = performance.now();
+  if (a && ahora - a.t < 400) { ATRAS[u] = null; ir(a.ini - u); }
+  else { const ini = Math.floor(video.currentTime / u) * u; ATRAS[u] = {t: ahora, ini}; ir(ini); }
 }
 video.addEventListener('ended', () => {
   if (S.tubo && video.playbackRate <= 2) S.L[S.tubo].v[S.N - 1] = 1;
@@ -666,7 +711,10 @@ const totales = e => cuenta(S.L[e].c);
 function refrescar() {
   if (!S.tubo) return;
   const L = S.L[S.tubo], s = segActual(), c = L.c[s], oc = oculto(L, s);
-  $('#info').innerHTML = `<span class="nd">${mmss(s)}</span> / ${mmss(S.N)} · segundo ${s + 1} de ${S.N} · ${video.playbackRate}×`;
+  const cb = claseBloque(L, Math.floor(s / BLOQUE_S));
+  $('#info').innerHTML = `<span class="nd">${mmss(s)}</span> / ${mmss(S.N)} · segundo ${s + 1} de ${S.N} · ${video.playbackRate}×` +
+    `<br>Bloque de 5 s: <b>${cb === null ? 'en curso' : NOMBRE[cb]}</b>`;
+  document.querySelectorAll('#modo .seg-opt').forEach(b => b.classList.toggle('on', +b.dataset.m === S.modo));
   $('#pausa').hidden = !video.paused;
   $('#btnPlay').textContent = video.paused ? 'Reproducir' : 'Pausar';
   $('#ahoraVal').innerHTML = oc ? '<span style="color:var(--muted)">—</span>'
@@ -752,7 +800,7 @@ function mostrarResumen() {
 }
 
 function construirHoja() {
-  const L0 = ['especimen,segundo,inicio_s,tiempo,clase,origen,propuesta'];
+  const L0 = ['especimen,segundo,inicio_s,tiempo,clase,origen,propuesta,bloque,clase_bloque'];
   for (const e of S.tubos) {
     const L = S.L[e];
     for (let s = 0; s < S.N; s++) {
@@ -764,7 +812,8 @@ function construirHoja() {
       else if (S.ciego) origen = 'humano_ciego';
       else origen = L.c[s] === L.p[s] ? 'humano_confirma' : 'humano_corrige';
       const c = S.ciego && !L.h[s] ? '' : L.c[s];
-      L0.push([e, s + 1, s, mmss(s), c, origen, S.ciego ? '' : L.p[s]].join(','));
+      const b = Math.floor(s / BLOQUE_S), cb = claseBloque(L, b);
+      L0.push([e, s + 1, s, mmss(s), c, origen, S.ciego ? '' : L.p[s], b + 1, cb ?? ''].join(','));
     }
   }
   return '﻿' + L0.join('\r\n') + '\r\n';
@@ -913,6 +962,10 @@ $('#vel').addEventListener('click', e => {
 $('#btnPlay').addEventListener('click', pausa);
 $('#cvMain').addEventListener('click', e => clicLinea(e, false));
 $('#cvZoom').addEventListener('click', e => clicLinea(e, true));
+$('#modo').addEventListener('click', e => {
+  const m = e.target.closest('.seg-opt'); if (!m) return;
+  S.modo = +m.dataset.m; refrescar();
+});
 $('#btnGuardar').addEventListener('click', guardarHoja);
 $('#btnGuardarRes').addEventListener('click', guardarHoja);
 $('#btnResumen').addEventListener('click', mostrarResumen);
@@ -931,12 +984,14 @@ $('#estadoBar').addEventListener('click', e => {
   construirEtiquetas(); S.hist = []; S.guardado = false;
   ir(0); pintar();
 });
-$('#pick').addEventListener('click', () => $('#inFiles').click());
+document.querySelectorAll('.slot').forEach(sl => {
+  const inp = $('#inFiles');
+  sl.querySelector('button').addEventListener('click', () => { inp.accept = sl.dataset.acc; inp.value = ''; inp.click(); });
+  ['dragenter', 'dragover'].forEach(ev => sl.addEventListener(ev, e => { e.preventDefault(); sl.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => sl.addEventListener(ev, e => { e.preventDefault(); sl.classList.remove('over'); }));
+  sl.addEventListener('drop', e => { e.stopPropagation(); tomarArchivos(e.dataTransfer.files); });
+});
 $('#inFiles').addEventListener('change', e => tomarArchivos(e.target.files));
-const drop = $('#drop');
-['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
-['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
-drop.addEventListener('drop', e => { e.stopPropagation(); tomarArchivos(e.dataTransfer.files); });
 window.addEventListener('dragover', e => e.preventDefault());
 window.addEventListener('drop', e => { e.preventDefault(); if (!$('#inicio').hidden) tomarArchivos(e.dataTransfer.files); });
 
@@ -950,7 +1005,9 @@ window.addEventListener('keydown', e => {
   if (k in TECLA) aplicar(TECLA[k], document.querySelector(`.cls[data-c="${TECLA[k]}"]`));
   else if (k === ' ') { e.preventDefault(); pausa(); }
   else if (k === 'ArrowRight') { e.preventDefault(); ir(Math.floor(video.currentTime) + (e.shiftKey ? 5 : 1)); }
-  else if (k === 'ArrowLeft') { e.preventDefault(); ir(Math.floor(video.currentTime) - (e.shiftKey ? 5 : 1)); }
+  else if (k === 'ArrowLeft') { e.preventDefault(); if (e.shiftKey) ir(Math.floor(video.currentTime) - 5); else atras(1); }
+  else if (k === 'ArrowDown') { e.preventDefault(); ir((Math.floor(video.currentTime / 5) + 1) * 5); }
+  else if (k === 'ArrowUp') { e.preventDefault(); atras(5); }
   else if (k === 'r' || k === 'R') ir(video.currentTime - 3);
   else if (k === 'Tab') {
     e.preventDefault();
