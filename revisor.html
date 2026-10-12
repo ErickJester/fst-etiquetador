@@ -271,7 +271,7 @@ table.cambios td:last-child{text-align:right;font-weight:700;font-variant-numeri
 
 <script>
 'use strict';
-const CLASES = ['nado', 'inmovilidad', 'escalamiento', 'activa'];
+const CONDUCTAS = ['nado', 'inmovilidad', 'escalamiento', 'activa'];
 const ACTIVAS = ['nado', 'escalamiento'];
 const NOMBRE = {nado: 'Nado', inmovilidad: 'Inmovilidad', escalamiento: 'Escalamiento', activa: 'Conducta activa'};
 const COLOR = {nado: 'var(--nado)', inmovilidad: 'var(--inm)', escalamiento: 'var(--esc)', activa: 'var(--act)'};
@@ -282,7 +282,7 @@ const video = $('#video');
 
 const S = {
   rows: [], byKey: new Map(), tubos: [], queue: [], cur: null,
-  labels: {},              // key -> {clase, prop, ciego}
+  labels: {},              // key -> {conducta, prop, ciego}
   videoName: '', videoOk: false, csvOk: false, conProp: false, mode: 'dudosos',
   dur: 0, segT0: 0, segT1: 0, raf: 0, marcas: [], blockEls: new Map(),
 };
@@ -318,7 +318,8 @@ function parseCSV(text) {
   }
   if (f !== '' || row.length) { row.push(f); out.push(row); }
   if (!out.length) return [];
-  const head = out.shift().map(h => sinAcentos(h.trim().toLowerCase()));
+  // hojas viejas: la columna se llamaba 'clase' / 'clase_bloque'
+  const head = out.shift().map(h => sinAcentos(h.trim().toLowerCase()).replace(/^clase/, 'conducta'));
   return out.map(r => Object.fromEntries(head.map((h, i) => [h, (r[i] ?? '').trim()])));
 }
 
@@ -328,14 +329,14 @@ function cargarCSV(text, nombreArchivo) {
   for (const k of ['bloque', 'especimen'])
     if (!(k in recs[0])) throw new Error(`Al CSV le falta la columna "${k}". ¿Es el que sale de etiquetar.py?`);
   // Sin propuestas (rasgos sacados sin --modelo) solo se puede ir desde cero.
-  S.conProp = 'clase' in recs[0] && recs.some(r => CLASES.includes(r.clase));
+  S.conProp = 'conducta' in recs[0] && recs.some(r => CONDUCTAS.includes(r.conducta));
 
   const rows = [];
   for (const r of recs) {
     const bloque = parseInt(r.bloque, 10), esp = parseInt(r.especimen, 10);
     if (!Number.isFinite(bloque) || !Number.isFinite(esp)) continue;
     const conf = parseFloat(r.confianza);
-    const prop = CLASES.includes(r.clase) ? r.clase : '';
+    const prop = CONDUCTAS.includes(r.conducta) ? r.conducta : '';
     let usar = r.usar !== undefined && r.usar !== '' ? parseInt(r.usar, 10)
                                                    : (conf >= 0.8 ? 1 : 0);
     if (!prop) usar = 0;
@@ -373,7 +374,13 @@ function guardarLocal() {
   catch (e) { /* navegacion privada o almacenamiento bloqueado: se sigue sin memoria */ }
 }
 function leerLocal(m) {
-  try { return JSON.parse(localStorage.getItem(claveLocal(m)) || 'null'); } catch (e) { return null; }
+  try {
+    const g = JSON.parse(localStorage.getItem(claveLocal(m)) || 'null');
+    // progreso guardado antes del cambio de nombre: {clase} -> {conducta}
+    for (const h of Object.values((g && g.labels) || {}))
+      if ('clase' in h) { h.conducta = h.clase; delete h.clase; }
+    return g;
+  } catch (e) { return null; }
 }
 function borrarLocal(m) {
   try { localStorage.removeItem(claveLocal(m)); } catch (e) { /* nada que borrar */ }
@@ -431,12 +438,12 @@ function pintarBloque(k) {
   const h = S.labels[k];
   const enCola = S.queue.includes(k);
   // desde cero no se enseña lo que dice la maquina, ni en la linea de tiempo
-  el.dataset.c = h ? h.clase : (ciego() ? '' : r.prop);
+  el.dataset.c = h ? h.conducta : (ciego() ? '' : r.prop);
   el.classList.toggle('maquina', !h && !enCola);
   el.classList.toggle('pend', !h && enCola);
-  el.classList.toggle('duda', !!h && h.clase === '');
+  el.classList.toggle('duda', !!h && h.conducta === '');
   el.classList.toggle('cur', k === S.cur);
-  const tu = h ? (h.clase ? NOMBRE[h.clase] : 'no seguro') : '—';
+  const tu = h ? (h.conducta ? NOMBRE[h.conducta] : 'no seguro') : '—';
   const maq = ciego() ? '' :
     `\nmáquina: ${r.prop ? NOMBRE[r.prop] : 'sin propuesta'}` +
     (Number.isFinite(r.conf) ? ` (${Math.round(r.conf * 100)}%)` : '');
@@ -552,20 +559,20 @@ function flecha(dir) {
 }
 
 /* ---------------- etiquetar ---------------- */
-function etiquetar(clase, fuente) {
+function etiquetar(conducta, fuente) {
   const r = S.byKey.get(S.cur);
   if (!r) return;
-  S.labels[r.key] = {clase, prop: r.prop, ciego: ciego()};
+  S.labels[r.key] = {conducta, prop: r.prop, ciego: ciego()};
   S.marcas.push(performance.now());
   if (S.marcas.length > 12) S.marcas.shift();
   pintarBloque(r.key);
   golpe(fuente);
 
-  if (clase === '') aviso('? Marcado como dudoso', 'var(--muted)');
-  else if (ciego() || !r.prop) aviso(NOMBRE[clase], COLOR[clase]);
-  else if (clase === r.prop) aviso('✓ ' + NOMBRE[clase], COLOR[clase]);
-  else if (compatibles(clase, r.prop)) aviso(`≈ ${NOMBRE[r.prop]} → ${NOMBRE[clase]}`, COLOR[clase]);
-  else aviso(`✎ ${NOMBRE[r.prop]} → ${NOMBRE[clase]}`, 'var(--gold)');
+  if (conducta === '') aviso('? Marcado como dudoso', 'var(--muted)');
+  else if (ciego() || !r.prop) aviso(NOMBRE[conducta], COLOR[conducta]);
+  else if (conducta === r.prop) aviso('✓ ' + NOMBRE[conducta], COLOR[conducta]);
+  else if (compatibles(conducta, r.prop)) aviso(`≈ ${NOMBRE[r.prop]} → ${NOMBRE[conducta]}`, COLOR[conducta]);
+  else aviso(`✎ ${NOMBRE[r.prop]} → ${NOMBRE[conducta]}`, 'var(--gold)');
 
   guardarLocal();
   const sig = siguientePendiente(r.key);
@@ -595,10 +602,10 @@ function contar() {
     const h = S.labels[k];
     if (!h) continue;
     hechos++;
-    if (h.clase === '') { duda++; continue; }
+    if (h.conducta === '') { duda++; continue; }
     if (!h.prop) continue;
     comparables++;
-    if (compatibles(h.clase, h.prop)) ok++; else cambio++;
+    if (compatibles(h.conducta, h.prop)) ok++; else cambio++;
   }
   return {ok, cambio, duda, hechos, comparables, total: S.queue.length};
 }
@@ -627,7 +634,7 @@ function refrescar() {
   if (!r) return;
   const h = S.labels[r.key];
   $('#info').innerHTML = `Tubo ${r.esp} · Bloque ${r.bloque}<span class="t">${r.t0}–${r.t1} s</span>` +
-    (h ? ` <span class="t">· tú: ${h.clase ? NOMBRE[h.clase] : 'no seguro'}</span>` : '');
+    (h ? ` <span class="t">· tú: ${h.conducta ? NOMBRE[h.conducta] : 'no seguro'}</span>` : '');
   $('#prop').hidden = ciego();
   const pv = $('#propVal');
   if (r.prop) {
@@ -654,8 +661,8 @@ function mostrarFinal() {
   const tr = {};
   for (const k of S.queue) {
     const h = S.labels[k];
-    if (h && h.clase && h.prop && !compatibles(h.clase, h.prop)) {
-      const t = `${NOMBRE[h.prop]} → ${NOMBRE[h.clase]}`;
+    if (h && h.conducta && h.prop && !compatibles(h.conducta, h.prop)) {
+      const t = `${NOMBRE[h.prop]} → ${NOMBRE[h.conducta]}`;
       tr[t] = (tr[t] || 0) + 1;
     }
   }
@@ -672,24 +679,24 @@ function mostrarFinal() {
 
 /* ---------------- exportar ---------------- */
 function construirHoja() {
-  const L = ['bloque,especimen,inicio_s,propuesta,seguridad,clase,confianza,origen'];
+  const L = ['bloque,especimen,inicio_s,propuesta,seguridad,conducta,confianza,origen'];
   const orden = [...S.rows].sort((a, b) => a.bloque - b.bloque || a.esp - b.esp);
   for (const r of orden) {
     const h = S.labels[r.key];
-    let clase = '', conf = '', origen = 'sin_revisar';
+    let conducta = '', conf = '', origen = 'sin_revisar';
     if (h) {
-      clase = h.clase;
-      conf = h.clase ? 'alta' : '';
-      origen = !h.clase ? 'humano_duda'
+      conducta = h.conducta;
+      conf = h.conducta ? 'alta' : '';
+      origen = !h.conducta ? 'humano_duda'
              : h.ciego ? 'humano_ciego'
-             : h.clase === r.prop ? 'humano_confirma' : 'humano_corrige';
+             : h.conducta === r.prop ? 'humano_confirma' : 'humano_corrige';
     } else if (!ciego() && r.usar === 1 && r.prop) {
       // los seguros que nadie miro entran con la propuesta, como en la bola de
       // nieve. Desde cero no: ahi solo cuenta lo que marcaste tu.
-      clase = r.prop; conf = 'media'; origen = 'maquina';
+      conducta = r.prop; conf = 'media'; origen = 'maquina';
     }
     L.push([r.bloque, r.esp, r.t0, r.prop,
-            Number.isFinite(r.conf) ? r.conf.toFixed(3) : '', clase, conf, origen].join(','));
+            Number.isFinite(r.conf) ? r.conf.toFixed(3) : '', conducta, conf, origen].join(','));
   }
   return '﻿' + L.join('\r\n') + '\r\n';
 }

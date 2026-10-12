@@ -306,7 +306,7 @@ kbd{font-family:var(--font-body);font-size:11px;font-weight:700;padding:0 5px;bo
 
 <script>
 'use strict';
-const CLASES = ['nado', 'inmovilidad', 'escalamiento', 'activa'];
+const CONDUCTAS = ['nado', 'inmovilidad', 'escalamiento', 'activa'];
 const NOMBRE = {nado: 'Nado activo', inmovilidad: 'Inmovilidad', escalamiento: 'Escalamiento', activa: 'Conducta activa', '': 'No se ve'};
 const TECLA = {'1': 'nado', '2': 'inmovilidad', '3': 'escalamiento', '4': 'activa', '0': ''};
 const FUENTE = {hoja: 'tu hoja por segundo', maqseg: 'la máquina, por segundo', mano: 'tus bloques de 5 s', maqbloque: 'la máquina, por bloque', cero: 'desde cero'};
@@ -322,8 +322,8 @@ const video = $('#video');
 const S = {
   videoName: '', videoOk: false,
   bloques: new Map(),   // "esp-bloque" -> {prop, usar, geo}
-  mano: null,           // Map "esp-bloque" -> clase
-  seg: null,            // {humano: bool, filas: Map "esp-seg" -> {clase, origen}}
+  mano: null,           // Map "esp-bloque" -> conducta
+  seg: null,            // {humano: bool, filas: Map "esp-seg" -> {conducta, origen}}
   tubos: [], N: 0, csvVideo: '',
   fuente: '', ciego: false,
   L: {},                // esp -> {c: [], p: [], h: Uint8Array, v: Uint8Array, d: Uint8Array}
@@ -370,17 +370,18 @@ function parseCSV(text) {
   }
   if (f !== '' || row.length) { row.push(f); out.push(row); }
   if (!out.length) return [];
-  const head = out.shift().map(h => sinAcentos(h.trim().toLowerCase()));
+  // hojas viejas: la columna se llamaba 'clase' / 'clase_bloque'
+  const head = out.shift().map(h => sinAcentos(h.trim().toLowerCase()).replace(/^clase/, 'conducta'));
   return out.map(r => Object.fromEntries(head.map((h, i) => [h, (r[i] ?? '').trim()])));
 }
-const clase = c => (CLASES.includes(c) ? c : '');
+const conducta = c => (CONDUCTAS.includes(c) ? c : '');
 
 // El tipo de CSV se reconoce por sus columnas, no por el nombre del archivo.
 function tipoCSV(recs) {
   const k = recs.length ? Object.keys(recs[0]) : [];
   if (k.includes('segundo')) return 'seg';
   if (k.includes('bx0') || k.includes('gx0') || k.includes('rng')) return 'rasgos';
-  if (k.includes('bloque') && k.includes('clase')) return 'mano';
+  if (k.includes('bloque') && k.includes('conducta')) return 'mano';
   return '';
 }
 
@@ -398,7 +399,7 @@ function leerRasgos(recs, nombre) {
       geo = {x0: g[0], x1: g[1], y0: Math.max(0, g[2] - 0.45 * col), y1: g[3] + 0.05 * col};
     }
     const usar = r.usar !== undefined && r.usar !== '' ? parseInt(r.usar, 10) : 1;
-    S.bloques.set(`${e}-${b}`, {prop: clase(r.clase), usar, geo});
+    S.bloques.set(`${e}-${b}`, {prop: conducta(r.conducta), usar, geo});
   }
   S.tubos = [...new Set([...S.bloques.keys()].map(k => +k.split('-')[0]))].sort((a, b) => a - b);
   S.csvVideo = recs[0].video || nombre.replace(/_(rasgos|cnn)\.csv$/i, '').replace(/\.csv$/i, '');
@@ -410,7 +411,7 @@ function leerMano(recs) {
   S.mano = new Map();
   for (const r of recs) {
     const b = parseInt(r.bloque, 10), e = parseInt(r.especimen, 10);
-    if (Number.isFinite(b) && Number.isFinite(e)) S.mano.set(`${e}-${b}`, clase(r.clase));
+    if (Number.isFinite(b) && Number.isFinite(e)) S.mano.set(`${e}-${b}`, conducta(r.conducta));
   }
   return `${S.mano.size} bloques tuyos`;
 }
@@ -423,7 +424,7 @@ function leerSeg(recs) {
     if (!Number.isFinite(s) || !Number.isFinite(e)) continue;
     const origen = r.origen || '';
     if (origen.startsWith('humano')) humano = true;
-    filas.set(`${e}-${s}`, {clase: clase(r.clase), origen, prop: clase(r.propuesta)});
+    filas.set(`${e}-${s}`, {conducta: conducta(r.conducta), origen, prop: conducta(r.propuesta)});
   }
   S.seg = {humano, filas};
   return humano ? `hoja por segundo tuya (${filas.size} filas)` : `propuesta por segundo (${filas.size} filas)`;
@@ -454,7 +455,7 @@ function construirEtiquetas() {
       else if (S.fuente === 'maqseg' || S.fuente === 'hoja') {
         const r = S.seg.filas.get(`${e}-${s + 1}`);
         if (r) {
-          c = r.clase;
+          c = r.conducta;
           if (S.fuente === 'hoja') {
             L.p[s] = r.prop;
             L.h[s] = r.origen === 'humano_corrige' || r.origen === 'humano_ciego' ? 1 : 0;
@@ -499,13 +500,13 @@ function mayoria(cs) {
   const n = {nado: 0, inmovilidad: 0, escalamiento: 0, activa: 0, '': 0};
   for (const c of cs) n[c in n ? c : '']++;
   const umbral = Math.floor(cs.length / 2) + 1;
-  for (const k of CLASES.concat([''])) if (n[k] >= umbral) return k;
+  for (const k of CONDUCTAS.concat([''])) if (n[k] >= umbral) return k;
   const act = n.nado + n.escalamiento + n.activa;
   if (!act && !n.inmovilidad) return '';
   return act >= n.inmovilidad ? 'activa' : 'inmovilidad';
 }
 // null mientras algun segundo del bloque no se haya revisado o marcado
-function claseBloque(L, b) {
+function conductaBloque(L, b) {
   const a = b * BLOQUE_S, z = Math.min(S.N, a + BLOQUE_S), cs = [];
   for (let s = a; s < z; s++) {
     if (!(S.ciego ? L.h[s] : (L.h[s] || L.v[s]))) return null;
@@ -711,7 +712,7 @@ const totales = e => cuenta(S.L[e].c);
 function refrescar() {
   if (!S.tubo) return;
   const L = S.L[S.tubo], s = segActual(), c = L.c[s], oc = oculto(L, s);
-  const cb = claseBloque(L, Math.floor(s / BLOQUE_S));
+  const cb = conductaBloque(L, Math.floor(s / BLOQUE_S));
   $('#info').innerHTML = `<span class="nd">${mmss(s)}</span> / ${mmss(S.N)} · segundo ${s + 1} de ${S.N} · ${video.playbackRate}×` +
     `<br>Bloque de 5 s: <b>${cb === null ? 'en curso' : NOMBRE[cb]}</b>`;
   document.querySelectorAll('#modo .seg-opt').forEach(b => b.classList.toggle('on', +b.dataset.m === S.modo));
@@ -744,7 +745,7 @@ function pintar() {
   $('#colProp').hidden = S.ciego;
   const a = cuenta(L.p), b = cuenta(L.c);
   const sinMarcar = S.ciego ? L.h.reduce((n, x) => n + (x ? 0 : 1), 0) : 0;
-  $('#totales').innerHTML = CLASES.concat(['']).map(k => {
+  $('#totales').innerHTML = CONDUCTAS.concat(['']).map(k => {
     const ahora = S.ciego && k === '' ? b[k] - sinMarcar : b[k];
     return `<div class="tot-row" style="padding:6px 0;border-bottom:1px solid var(--color-divider);font-size:12px">` +
       `<span style="display:flex;align-items:center;gap:8px">${sw(k)}${NOMBRE[k]}</span>` +
@@ -788,10 +789,10 @@ function mostrarResumen() {
   if (!S.N || !S.tubo) return;
   const filas = S.tubos.map(e => {
     const t = totales(e), L = S.L[e], vistos = L.v.reduce((a, b) => a + b, 0);
-    return `<tr><td class="nd" style="white-space:nowrap">Espécimen ${e}</td>${CLASES.map(c => `<td>${t[c]}</td>`).join('')}<td>${t['']}</td>` +
+    return `<tr><td class="nd" style="white-space:nowrap">Espécimen ${e}</td>${CONDUCTAS.map(c => `<td>${t[c]}</td>`).join('')}<td>${t['']}</td>` +
            `<td>${Math.round(100 * vistos / S.N)} %</td></tr>`;
   }).join('');
-  $('#resTabla').innerHTML = `<tr><th></th>${CLASES.map(c => `<th>${NOMBRE[c]}</th>`).join('')}` +
+  $('#resTabla').innerHTML = `<tr><th></th>${CONDUCTAS.map(c => `<th>${NOMBRE[c]}</th>`).join('')}` +
     `<th>Sin decidir</th><th>Visto</th></tr>` + filas;
   $('#resTxt').textContent = `Segundos de cada conducta en los ${S.N} s del video. ` +
     'Solo cuenta como revisado lo que viste a 2× o más lento.';
@@ -800,7 +801,7 @@ function mostrarResumen() {
 }
 
 function construirHoja() {
-  const L0 = ['especimen,segundo,inicio_s,tiempo,clase,origen,propuesta,bloque,clase_bloque'];
+  const L0 = ['especimen,segundo,inicio_s,tiempo,conducta,origen,propuesta,bloque,conducta_bloque'];
   for (const e of S.tubos) {
     const L = S.L[e];
     for (let s = 0; s < S.N; s++) {
@@ -812,7 +813,7 @@ function construirHoja() {
       else if (S.ciego) origen = 'humano_ciego';
       else origen = L.c[s] === L.p[s] ? 'humano_confirma' : 'humano_corrige';
       const c = S.ciego && !L.h[s] ? '' : L.c[s];
-      const b = Math.floor(s / BLOQUE_S), cb = claseBloque(L, b);
+      const b = Math.floor(s / BLOQUE_S), cb = conductaBloque(L, b);
       L0.push([e, s + 1, s, mmss(s), c, origen, S.ciego ? '' : L.p[s], b + 1, cb ?? ''].join(','));
     }
   }

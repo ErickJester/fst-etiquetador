@@ -56,45 +56,45 @@ ACTIVAS = ('nado', 'escalamiento')
 
 
 def proponer(bl, paq, umbral, log=print):
-    """Rellena clase, confianza, usar y p_* con la regla de tres pasos."""
+    """Rellena conducta, confianza, usar y p_* con la regla de tres pasos."""
     mod, feats = paq['modelo'], paq['caracteristicas']
     falta = [c for c in feats if c not in bl.columns]
     if falta:
         raise SystemExit('el modelo pide columnas que no existen: %s' % falta)
     bl = bl.drop(columns=[c for c in bl.columns
-                          if c in ('clase', 'confianza', 'usar') or c.startswith('p_')])
+                          if c in ('conducta', 'confianza', 'usar') or c.startswith('p_')])
     X = bl[feats].to_numpy(float)
     val = ~np.isnan(X).any(1)
-    clases = list(mod.classes_)
-    P = np.full((len(bl), len(clases)), np.nan)
+    conductas = list(mod.classes_)
+    P = np.full((len(bl), len(conductas)), np.nan)
     if val.any():
         P[val] = mod.predict_proba(X[val])
-    for j, c in enumerate(clases):
+    for j, c in enumerate(conductas):
         bl['p_' + c] = P[:, j].round(3)
 
     mejor = np.where(val, np.nanargmax(np.where(val[:, None], P, 0), axis=1), -1)
     conf_mejor = np.where(val, np.nanmax(np.where(val[:, None], P, 0), axis=1), np.nan)
-    activa = sum(P[:, clases.index(c)] for c in ACTIVAS if c in clases)
+    activa = sum(P[:, conductas.index(c)] for c in ACTIVAS if c in conductas)
 
-    clase, conf, usar = [], [], []
+    conducta, conf, usar = [], [], []
     for i in range(len(bl)):
         if not val[i]:
-            clase.append(''); conf.append(np.nan); usar.append(0)
+            conducta.append(''); conf.append(np.nan); usar.append(0)
         elif conf_mejor[i] >= umbral:
-            clase.append(clases[mejor[i]]); conf.append(conf_mejor[i]); usar.append(1)
+            conducta.append(conductas[mejor[i]]); conf.append(conf_mejor[i]); usar.append(1)
         elif activa[i] >= umbral:
-            clase.append('activa'); conf.append(activa[i]); usar.append(1)
+            conducta.append('activa'); conf.append(activa[i]); usar.append(1)
         else:
-            clase.append(clases[mejor[i]]); conf.append(conf_mejor[i]); usar.append(0)
-    bl['clase'] = clase
+            conducta.append(conductas[mejor[i]]); conf.append(conf_mejor[i]); usar.append(0)
+    bl['conducta'] = conducta
     bl['confianza'] = np.round(conf, 3)
     bl['usar'] = usar
 
     u = bl[bl.usar == 1]
     log('\n  reparto de conductas (solo las filas usar=1):')
-    for c, k in u['clase'].value_counts().items():
+    for c, k in u['conducta'].value_counts().items():
         log('    %-14s %3d bloques  (%4.0f s)' % (c, k, k * lib.BLOCK_S))
-    n_act = int((bl.clase == 'activa').sum())
+    n_act = int((bl.conducta == 'activa').sum())
     if n_act:
         log('  de esos, %d son "activa": no inmovil, sin decidir si nada o trepa' % n_act)
     log('  aprovechables: %d de %d bloques (%.0f%%)   dudosos: %d'

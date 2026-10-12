@@ -10,7 +10,7 @@ Si el video es nuevo, primero:
     py etiquetar.py videos_sin_etiquetar/NUEVO.MOV --tubos 4
 
 Deja etiquetas/NUEVO_cnn.csv, con el mismo formato que un _rasgos.csv pero con
-las propuestas de la CNN en clase, confianza, usar y p_*. Abrelo en
+las propuestas de la CNN en conducta, confianza, usar y p_*. Abrelo en
 revisor.html junto con el video para ver lo que dice la CNN bloque por bloque.
 
 Si ademas existe NUEVO_mano.csv, compara la CNN contra tus etiquetas.
@@ -51,43 +51,43 @@ def cargar_red(ruta):
     return m, paq
 
 
-def proponer(P, clases, umbral):
+def proponer(P, conductas, umbral):
     """La misma regla de tres pasos que etiquetar.py."""
-    act = sum(P[:, clases.index(c)] for c in ACTIVAS)
-    clase, conf, usar = [], [], []
+    act = sum(P[:, conductas.index(c)] for c in ACTIVAS)
+    conducta, conf, usar = [], [], []
     for p, a in zip(P, act):
         j = int(p.argmax())
         if p[j] >= umbral:
-            clase.append(clases[j]); conf.append(p[j]); usar.append(1)
+            conducta.append(conductas[j]); conf.append(p[j]); usar.append(1)
         elif a >= umbral:
-            clase.append('activa'); conf.append(a); usar.append(1)
+            conducta.append('activa'); conf.append(a); usar.append(1)
         else:
-            clase.append(clases[j]); conf.append(p[j]); usar.append(0)
-    return clase, np.round(conf, 3), usar
+            conducta.append(conductas[j]); conf.append(p[j]); usar.append(0)
+    return conducta, np.round(conf, 3), usar
 
 
 def comparar(d, mano_csv, vistos):
     from sklearn.metrics import cohen_kappa_score
-    m = pd.read_csv(mano_csv, encoding='utf-8-sig')[['bloque', 'especimen', 'clase']]
+    m = pd.read_csv(mano_csv, encoding='utf-8-sig')[['bloque', 'especimen', 'conducta']]
     j = d[['bloque', 'especimen', 'p_inmovilidad']].merge(m, on=['bloque', 'especimen'])
-    j['clase'] = j['clase'].fillna('').astype(str).str.strip().str.lower()
-    tres = j[j['clase'].isin(fst_cnn.CLASES)]
+    j['conducta'] = j['conducta'].fillna('').astype(str).str.strip().str.lower()
+    tres = j[j['conducta'].isin(fst_cnn.CONDUCTAS)]
     print('\ncontra tu %s:' % os.path.basename(mano_csv))
     if vistos:
         print('  OJO: la red se entreno con este video. La nota sale inflada;')
         print('  para medirla de verdad usa un video que no este en la lista.')
-    # la CNN puede proponer 'activa'; para las 3 conductas se usa su mejor clase
-    mejor = d.set_index(['bloque', 'especimen'])[['p_' + c for c in fst_cnn.CLASES]]
+    # la CNN puede proponer 'activa'; para las 3 conductas se usa su mejor conducta
+    mejor = d.set_index(['bloque', 'especimen'])[['p_' + c for c in fst_cnn.CONDUCTAS]]
     # los bloques que no se pudieron recortar no tienen prediccion
     mejor = mejor.dropna().idxmax(axis=1).str[2:]
     tres = tres[tres.set_index(['bloque', 'especimen']).index.isin(mejor.index)]
     j = j.dropna(subset=['p_inmovilidad'])
     pred = tres.set_index(['bloque', 'especimen']).index.map(mejor)
-    print('  exactitud (3 conductas) : %.3f   (%d bloques)' % ((pred == tres['clase']).mean(), len(tres)))
-    print('  kappa                   : %+.3f' % cohen_kappa_score(tres['clase'], pred))
-    ri = j['clase'] == 'inmovilidad'
+    print('  exactitud (3 conductas) : %.3f   (%d bloques)' % ((pred == tres['conducta']).mean(), len(tres)))
+    print('  kappa                   : %+.3f' % cohen_kappa_score(tres['conducta'], pred))
+    ri = j['conducta'] == 'inmovilidad'
     pi = j['p_inmovilidad'] >= 0.5
-    ok = j['clase'].isin(fst_cnn.CLASES + ['activa'])
+    ok = j['conducta'].isin(fst_cnn.CONDUCTAS + ['activa'])
     print('  Porsolt, inmovil/activa : %.3f' % (ri[ok] == pi[ok]).mean())
 
 
@@ -115,7 +115,7 @@ def main():
     X, visto = recortar.recortar(video, d, paq['frames'])
     completos = visto.all(1)
     print('prediciendo (%.0f s)' % (time.time() - t))
-    P = np.full((len(d), len(fst_cnn.CLASES)), np.nan)
+    P = np.full((len(d), len(fst_cnn.CONDUCTAS)), np.nan)
     if completos.any():
         with torch.no_grad():
             M = None
@@ -126,11 +126,11 @@ def main():
             P[completos] = fst_cnn.predecir(m, X[completos], M=M)
 
     d = d.drop(columns=[c for c in d.columns
-                        if c in ('clase', 'confianza', 'usar') or c.startswith('p_')])
-    for j, c in enumerate(fst_cnn.CLASES):
+                        if c in ('conducta', 'confianza', 'usar') or c.startswith('p_')])
+    for j, c in enumerate(fst_cnn.CONDUCTAS):
         d['p_' + c] = P[:, j].round(3)
-    clase, conf, usar = proponer(np.nan_to_num(P), fst_cnn.CLASES, a.umbral)
-    d['clase'] = np.where(completos, clase, '')
+    conducta, conf, usar = proponer(np.nan_to_num(P), fst_cnn.CONDUCTAS, a.umbral)
+    d['conducta'] = np.where(completos, conducta, '')
     d['confianza'] = np.where(completos, conf, np.nan)
     d['usar'] = np.where(completos, usar, 0)
 
@@ -139,7 +139,7 @@ def main():
 
     u = d[d.usar == 1]
     print('\nreparto (solo usar=1):')
-    for c, k in u['clase'].value_counts().items():
+    for c, k in u['conducta'].value_counts().items():
         print('  %-14s %3d bloques' % (c, k))
     print('aprovechables: %d de %d   dudosos: %d' % (len(u), len(d), len(d) - len(u)))
     print('-> %s   (%.0f s)' % (dest, time.time() - t))

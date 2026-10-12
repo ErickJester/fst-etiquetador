@@ -49,7 +49,7 @@ sobre el suelo del tubo. Si no, ese video no sirve y no hay que insistir.
 ### Paso 2 — entrenar con él
 
 Pon tu puntuación manual al lado, llamada `IMG_0826_mano.csv`, con las columnas
-`bloque`, `especimen`, `clase` y (si la tienes) `confianza`.
+`bloque`, `especimen`, `conducta` y (si la tienes) `confianza`.
 
 ```bash
 py entrenar.py --carpeta etiquetas --etiquetas mano

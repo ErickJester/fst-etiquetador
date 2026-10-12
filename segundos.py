@@ -51,19 +51,19 @@ def tiempo(s):
     return '%d:%02d' % (s // 60, s % 60)
 
 
-def regla(P, clases, umbral):
+def regla(P, conductas, umbral):
     """La misma regla de tres pasos que etiquetar.py, segundo a segundo."""
-    act = sum(P[:, clases.index(c)] for c in ACTIVAS if c in clases)
-    clase, conf = [], []
+    act = sum(P[:, conductas.index(c)] for c in ACTIVAS if c in conductas)
+    conducta, conf = [], []
     for p, a in zip(P, act):
         j = int(np.argmax(p))
         if p[j] >= umbral:
-            clase.append(clases[j]); conf.append(p[j])
+            conducta.append(conductas[j]); conf.append(p[j])
         elif a >= umbral:
-            clase.append('activa'); conf.append(a)
+            conducta.append('activa'); conf.append(a)
         else:
-            clase.append(clases[j]); conf.append(p[j])
-    return clase, np.round(conf, 3)
+            conducta.append(conductas[j]); conf.append(p[j])
+    return conducta, np.round(conf, 3)
 
 
 def medir(cuadros_csv, ventana, paso_modelo=None):
@@ -80,30 +80,30 @@ def resumen(out):
     filas = []
     for e, de in out.groupby('especimen'):
         for mi, d in list(de.groupby('minuto')) + [('total', de)]:
-            v = d['clase'].value_counts()
+            v = d['conducta'].value_counts()
             filas.append(dict(especimen=e, minuto=mi, **{k: int(v.get(k, 0)) for k in cols},
-                              sin_decidir=int((d['clase'] == '').sum())))
+                              sin_decidir=int((d['conducta'] == '').sum())))
     return pd.DataFrame(filas)
 
 
 def proponer(a):
     import joblib
     paq = joblib.load(a.modelo)
-    clases, feats = list(paq['clases']), paq['caracteristicas']
+    conductas, feats = list(paq.get('conductas', paq.get('clases'))), paq['caracteristicas']
     for cu in a.archivos:
         nombre = os.path.basename(cu)[:-len('_cuadros.csv')]
         S = medir(cu, a.ventana, paq.get('paso'))
         X = S[feats].to_numpy(float)
         ok = ~np.isnan(X).any(axis=1)
-        P = np.full((len(S), len(clases)), np.nan)
+        P = np.full((len(S), len(conductas)), np.nan)
         if ok.any():
             P[ok] = paq['modelo'].predict_proba(X[ok])
-        c, conf = regla(np.nan_to_num(P), clases, a.umbral)
+        c, conf = regla(np.nan_to_num(P), conductas, a.umbral)
         out = S[['especimen', 'segundo', 'inicio_s']].copy()
         out.insert(3, 'tiempo', [tiempo(int(s)) for s in out['inicio_s']])
-        out['clase'] = np.where(ok, c, '')
+        out['conducta'] = np.where(ok, c, '')
         out['confianza'] = np.where(ok, conf, np.nan)
-        for j, k in enumerate(clases):
+        for j, k in enumerate(conductas):
             out['p_' + k] = np.round(P[:, j], 3)
         out['ventana_s'] = a.ventana
         carpeta = os.path.dirname(cu) or '.'
@@ -124,15 +124,15 @@ def validar(a):
     juntan sus segundos por bloque y se compara la mayoria con tu bloque."""
     from sklearn.ensemble import HistGradientBoostingClassifier
     from sklearn.metrics import cohen_kappa_score, precision_recall_fscore_support as prfs
-    clases = ['escalamiento', 'inmovilidad', 'nado']
+    conductas = ['escalamiento', 'inmovilidad', 'nado']
 
     def bloques_de(v):
         r = pd.read_csv(os.path.join(a.carpeta, v + '_rasgos.csv'), encoding='utf-8-sig')
-        r = r.drop(columns=[c for c in ('clase', 'confianza', 'usar') if c in r.columns])
+        r = r.drop(columns=[c for c in ('conducta', 'confianza', 'usar') if c in r.columns])
         m = pd.read_csv(os.path.join(a.carpeta, v + '_mano.csv'), encoding='utf-8-sig')
-        d = r.merge(m[['bloque', 'especimen', 'clase']], on=['bloque', 'especimen'])
-        d['clase'] = d['clase'].fillna('')
-        return d[d['clase'].isin(clases)].dropna(subset=lib.RASGOS)
+        d = r.merge(m[['bloque', 'especimen', 'conducta']], on=['bloque', 'especimen'])
+        d['conducta'] = d['conducta'].fillna('')
+        return d[d['conducta'].isin(conductas)].dropna(subset=lib.RASGOS)
 
     todos = sorted(os.path.basename(f)[:-len('_mano.csv')]
                    for f in glob.glob(os.path.join(a.carpeta, '*_mano.csv'))
@@ -148,33 +148,33 @@ def validar(a):
         tr = pd.concat([B[o] for o in todos if o != v])
         mdl = HistGradientBoostingClassifier(max_iter=300, learning_rate=0.06, max_leaf_nodes=15,
                                              l2_regularization=1.0, random_state=0)
-        mdl.fit(tr[lib.RASGOS].to_numpy(float), tr['clase'])
+        mdl.fit(tr[lib.RASGOS].to_numpy(float), tr['conducta'])
         S = medir(os.path.join(a.carpeta, v + '_cuadros.csv'), a.ventana)
         S = S[S[lib.RASGOS].notna().all(axis=1)].copy()
         S['pred'] = mdl.predict(S[lib.RASGOS].to_numpy(float))
         m = pd.read_csv(os.path.join(a.carpeta, v + '_mano.csv'), encoding='utf-8-sig')
-        lab = {(e, b): c for e, b, c in zip(m['especimen'], m['bloque'], m['clase'].fillna(''))}
+        lab = {(e, b): c for e, b, c in zip(m['especimen'], m['bloque'], m['conducta'].fillna(''))}
         S['bloque'] = S['inicio_s'] // lib.BLOCK_S + 1
         S['tuya'] = [lab.get((e, b), '') for e, b in zip(S['especimen'], S['bloque'])]
         S['video'] = v
-        res.append(S[S['tuya'].isin(clases)])
+        res.append(S[S['tuya'].isin(conductas)])
         print('  %-16s listo' % v)
     D = pd.concat(res)
     g = D.groupby(['video', 'especimen', 'bloque'])
     may = g.agg(tuya=('tuya', 'first'), maq=('pred', lambda x: x.value_counts().idxmax()))
-    f1 = prfs(may['tuya'], may['maq'], labels=clases, zero_division=0)[2]
+    f1 = prfs(may['tuya'], may['maq'], labels=conductas, zero_division=0)[2]
     print('\nventana de %.0f s, mayoria de los segundos de cada bloque contra tu bloque (%d bloques):'
           % (a.ventana, len(may)))
     print('  exactitud %.3f   kappa %+.3f' % ((may['tuya'] == may['maq']).mean(),
                                             cohen_kappa_score(may['tuya'], may['maq'])))
-    for c, f in zip(clases, f1):
+    for c, f in zip(conductas, f1):
         print('  F1 %-13s %.3f' % (c, f))
     mez = g['pred'].nunique()
     print('\nbloques donde aparece mas de una conducta: %d de %d (%.0f%%)'
           % ((mez > 1).sum(), len(mez), 100 * (mez > 1).mean()))
     print('segundos por conducta     tus bloques (x5)   segundo a segundo')
     vb, vs = D['tuya'].value_counts(), D['pred'].value_counts()
-    for c in clases:
+    for c in conductas:
         print('  %-22s %10d %18d' % (c, vb.get(c, 0), vs.get(c, 0)))
 
 

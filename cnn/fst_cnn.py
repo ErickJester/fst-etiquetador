@@ -56,13 +56,13 @@ from sklearn.metrics import cohen_kappa_score, confusion_matrix
 # Sube este numero con cada cambio. Se imprime al cargar el modulo y al
 # validar, para confirmar que Colab esta usando la copia nueva de Drive.
 #   1  3 fotogramas crudos, 12 epocas
-#   2  40 epocas, peso de clases con raiz
+#   2  40 epocas, peso de conductas con raiz
 #   3  mapas de movimiento (kappa +0.574 con 8 fotogramas, +0.580 con 16)
 #   4  CNN 3D R(2+1)D-18 preentrenada en Kinetics (kappa +0.625)
 #   5  fusion: CNN 3D + rasgos del etiquetador + reglas de pataleo y nariz
 VERSION = 5
 
-CLASES = ['escalamiento', 'inmovilidad', 'nado']
+CONDUCTAS = ['escalamiento', 'inmovilidad', 'nado']
 MEDIA, DESV = 0.45, 0.225
 ENTRADA = 'fusion'       # 'fusion', 'video3d', 'movimiento' o 'trios'
 # lo que cambia por tipo de red: la 3D pesa mucho mas por clip
@@ -90,22 +90,23 @@ print('fst_cnn version %d cargada' % VERSION)
 
 def cargar(carpeta, usar_dudosas=False):
     """Todos los X.npz de la carpeta -> X (N, T, H, W) uint8 y sus etiquetas."""
-    X, clase, video, esp, blo = [], [], [], [], []
+    X, conducta, video, esp, blo = [], [], [], [], []
     for f in sorted(glob.glob(os.path.join(carpeta, '*.npz'))):
         z = np.load(f)
-        ok = np.ones(len(z['clase']), bool)
+        cz = z['conducta'] if 'conducta' in z.files else z['clase']   # clips viejos
+        ok = np.ones(len(cz), bool)
         if not usar_dudosas:
             ok = ~np.char.startswith(np.char.lower(z['confianza'].astype(str)), 'baj')
         X.append(z['X'][ok])
-        clase.append(z['clase'][ok])
+        conducta.append(cz[ok])
         video.append(np.full(ok.sum(), str(z['video'])))
         esp.append(z['especimen'][ok])
         blo.append(z['bloque'][ok])
         print('  %-16s %4d clips' % (str(z['video']), ok.sum()))
-    X, clase, video = np.concatenate(X), np.concatenate(clase), np.concatenate(video)
+    X, conducta, video = np.concatenate(X), np.concatenate(conducta), np.concatenate(video)
     print('%d clips, %d videos, %d fotogramas por clip, %dx%d'
           % (len(X), len(set(video)), X.shape[1], X.shape[3], X.shape[2]))
-    return X, clase, video, dict(especimen=np.concatenate(esp), bloque=np.concatenate(blo))
+    return X, conducta, video, dict(especimen=np.concatenate(esp), bloque=np.concatenate(blo))
 
 
 def reglas(X, lote=128):
@@ -238,7 +239,7 @@ class Fusion(nn.Module):
         self.cnn.fc = nn.Identity()
         self.med = nn.Sequential(nn.Linear(n_med, 64), nn.ReLU(), nn.Dropout(0.2),
                                  nn.Linear(64, 64), nn.ReLU())
-        self.cab = nn.Sequential(nn.Dropout(0.3), nn.Linear(512 + 64, len(CLASES)))
+        self.cab = nn.Sequential(nn.Dropout(0.3), nn.Linear(512 + 64, len(CONDUCTAS)))
         # centrado de las medidas; se fija con los datos de entrenamiento
         self.register_buffer('mediana', torch.zeros(n_med))
         self.register_buffer('mu', torch.zeros(n_med))
@@ -263,11 +264,11 @@ def red(preentrenada=True, n_med=None):
     if ENTRADA == 'video3d':
         from torchvision.models.video import r2plus1d_18, R2Plus1D_18_Weights
         m = r2plus1d_18(weights=R2Plus1D_18_Weights.KINETICS400_V1 if preentrenada else None)
-        m.fc = nn.Linear(m.fc.in_features, len(CLASES))
+        m.fc = nn.Linear(m.fc.in_features, len(CONDUCTAS))
         return m
     from torchvision.models import resnet18, ResNet18_Weights
     m = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1 if preentrenada else None)
-    m.fc = nn.Linear(m.fc.in_features, len(CLASES))
+    m.fc = nn.Linear(m.fc.in_features, len(CONDUCTAS))
     return m
 
 
@@ -286,8 +287,8 @@ def entrenar(X, y, epocas=None, lote=None, lr=None, M=None, log=print):
     # nado es 4-5 veces escalamiento. Compensarlo del todo (peso 1/frecuencia)
     # hizo que viera escalamiento en 418 bloques de nado; con la raiz se
     # compensa a medias
-    frec = np.bincount(y, minlength=len(CLASES)).astype(float)
-    peso = np.sqrt(frec.sum() / (len(CLASES) * np.maximum(frec, 1)))
+    frec = np.bincount(y, minlength=len(CONDUCTAS)).astype(float)
+    peso = np.sqrt(frec.sum() / (len(CONDUCTAS) * np.maximum(frec, 1)))
     peso = torch.tensor(peso / peso.mean(), dtype=torch.float32)
     crit = nn.CrossEntropyLoss(weight=peso.to(dev), label_smoothing=0.05)
     if ENTRADA == 'fusion':
@@ -333,7 +334,7 @@ def predecir(m, X, lote=None, M=None):
     lote = lote or AJUSTES[ENTRADA]['lote_pred']
     dev = dispositivo()
     m.eval()
-    P = np.zeros((len(X), len(CLASES)))
+    P = np.zeros((len(X), len(CONDUCTAS)))
     ts = trios(X.shape[1]) if ENTRADA == 'trios' else [None]
     for tr in ts:
         dl = DataLoader(Clips(X, trio=tr, M=M), batch_size=lote)
@@ -348,11 +349,11 @@ def predecir(m, X, lote=None, M=None):
 def validar(carpeta, partes=5, epocas=None, usar_dudosas=False):
     """Validacion cruzada POR VIDEO: cada video se predice con una red que
     nunca lo vio. Imprime lo mismo que entrenar.py para poder compararlos."""
-    X, clase, video, meta = cargar(carpeta, usar_dudosas)
+    X, conducta, video, meta = cargar(carpeta, usar_dudosas)
     M = medidas(carpeta, X, video, meta) if ENTRADA == 'fusion' else None
-    tres = np.isin(clase, CLASES)
-    y = np.array([CLASES.index(c) if c in CLASES else -1 for c in clase])
-    P = np.full((len(X), len(CLASES)), np.nan)
+    tres = np.isin(conducta, CONDUCTAS)
+    y = np.array([CONDUCTAS.index(c) if c in CONDUCTAS else -1 for c in conducta])
+    P = np.full((len(X), len(CONDUCTAS)), np.nan)
     gk = GroupKFold(n_splits=min(partes, len(set(video))))
     print('\nfst_cnn version %d, entrada %s' % (VERSION, ENTRADA))
     print('validando por video, en %d partes (%s)' % (gk.n_splits, dispositivo()))
@@ -367,19 +368,19 @@ def validar(carpeta, partes=5, epocas=None, usar_dudosas=False):
 
     pred = P.argmax(1)
     yt, pt, Pt = y[tres], pred[tres], P[tres]
-    print('\n  adivinar la clase mas comun : %.3f' % (np.bincount(yt).max() / len(yt)))
+    print('\n  adivinar la conducta mas comun : %.3f' % (np.bincount(yt).max() / len(yt)))
     print('  exactitud                   : %.3f' % (yt == pt).mean())
     print('  kappa                       : %+.3f' % cohen_kappa_score(yt, pt))
-    for j, c in enumerate(CLASES):
+    for j, c in enumerate(CONDUCTAS):
         print('  acierto en %-17s: %.3f' % (c, (pt[yt == j] == j).mean()))
-    cm = confusion_matrix(yt, pt, labels=range(len(CLASES)))
+    cm = confusion_matrix(yt, pt, labels=range(len(CONDUCTAS)))
     print('\n  confusion (fila = tu etiqueta, columna = la de la CNN):')
-    print('  %-14s' % '' + ''.join('%12.10s' % c for c in CLASES))
-    for j, c in enumerate(CLASES):
+    print('  %-14s' % '' + ''.join('%12.10s' % c for c in CONDUCTAS))
+    for j, c in enumerate(CONDUCTAS):
         print('  %-14s' % c + ''.join('%12d' % v for v in cm[j]))
 
-    inm = CLASES.index('inmovilidad')
-    ri, pi = clase == 'inmovilidad', P[:, inm] >= 0.5
+    inm = CONDUCTAS.index('inmovilidad')
+    ri, pi = conducta == 'inmovilidad', P[:, inm] >= 0.5
     print('\n  nivel Porsolt, inmovil contra activa (%d clips, incluye los "activa"):' % len(X))
     print('  exactitud                   : %.3f' % (ri == pi).mean())
     print('  kappa                       : %+.3f' % cohen_kappa_score(ri, pi))
@@ -392,18 +393,18 @@ def validar(carpeta, partes=5, epocas=None, usar_dudosas=False):
     for u in (0.0, 0.6, 0.7, 0.8, 0.9):
         s = conf >= u
         print('  %.2f     %6d    %4.0f%%      %.3f' % (u, s.sum(), 100 * s.mean(), (yt[s] == pt[s]).mean()))
-    return P, clase, video
+    return P, conducta, video
 
 
 def informe_f1(yt, pt, ri, pi):
     """F1 por conducta frente a la meta de la tesis (RNF-02) y, si no se
     alcanza, al nivel de conducta activa que permite RN-13."""
     from sklearn.metrics import precision_recall_fscore_support as prfs
-    pr, rc, f1, _ = prfs(yt, pt, labels=range(len(CLASES)), zero_division=0)
+    pr, rc, f1, _ = prfs(yt, pt, labels=range(len(CONDUCTAS)), zero_division=0)
     ok = lambda v: 'SI' if v >= F1_META else 'no'
     print('\n  F1 por conducta (meta de la tesis: >= %.2f)' % F1_META)
     print('  %-14s %9s %8s %6s  cumple' % ('', 'precision', 'recall', 'F1'))
-    for j, c in enumerate(CLASES):
+    for j, c in enumerate(CONDUCTAS):
         print('  %-14s %9.3f %8.3f %6.3f  %s' % (c, pr[j], rc[j], f1[j], ok(f1[j])))
     print('  %-14s %25.3f' % ('promedio', f1.mean()))
     p2, r2, f2, _ = prfs(ri, pi, labels=[True, False], zero_division=0)
@@ -420,14 +421,14 @@ def informe_f1(yt, pt, ri, pi):
 
 def final(carpeta, destino, epocas=None, usar_dudosas=False):
     """Entrena con TODOS los clips y guarda la red."""
-    X, clase, video, meta = cargar(carpeta, usar_dudosas)
+    X, conducta, video, meta = cargar(carpeta, usar_dudosas)
     M = medidas(carpeta, X, video, meta) if ENTRADA == 'fusion' else None
-    tres = np.isin(clase, CLASES)
-    y = np.array([CLASES.index(c) for c in clase[tres]])
+    tres = np.isin(conducta, CONDUCTAS)
+    y = np.array([CONDUCTAS.index(c) for c in conducta[tres]])
     print('\nfst_cnn version %d, entrada %s' % (VERSION, ENTRADA))
     print('entrenando la red final con %d clips (%s)' % (tres.sum(), dispositivo()))
     m = entrenar(X[tres], y, epocas=epocas, M=None if M is None else M[tres])
-    torch.save(dict(pesos=m.state_dict(), clases=CLASES, frames=X.shape[1],
+    torch.save(dict(pesos=m.state_dict(), conductas=CONDUCTAS, frames=X.shape[1],
                     medidas=(RASGOS + REGLAS) if M is not None else None,
                     alto=X.shape[2], ancho=X.shape[3], videos=sorted(set(video)),
                     n_clips=int(tres.sum()), version=VERSION, entrada=ENTRADA), destino)

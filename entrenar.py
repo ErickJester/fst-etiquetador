@@ -4,7 +4,7 @@
     py entrenar.py --carpeta etiquetas --etiquetas mano
 
 El archivo de rasgos lo produce etiquetar.py. El de etiquetas es tu puntuacion
-manual y necesita al menos: bloque, especimen, clase. Si trae una columna
+manual y necesita al menos: bloque, especimen, conducta. Si trae una columna
 'confianza', por defecto se descartan las filas de confianza baja: una etiqueta
 en la que tu dudaste no ensena nada, solo mete ruido.
 
@@ -43,16 +43,16 @@ def cargar(pares, usar_dudosas):
         for c in ('bloque', 'especimen'):
             if c not in r.columns or c not in e.columns:
                 raise SystemExit('falta la columna "%s" en %s o %s' % (c, rr, re_))
-        if 'clase' not in e.columns:
-            raise SystemExit('%s no tiene columna "clase"' % re_)
-        cols = ['bloque', 'especimen', 'clase']
+        if 'conducta' not in e.columns:
+            raise SystemExit('%s no tiene columna "conducta"' % re_)
+        cols = ['bloque', 'especimen', 'conducta']
         if 'confianza' in e.columns:
             cols.append('confianza')
         # Si los rasgos se sacaron con --modelo, traen la propuesta de la
-        # maquina en 'clase', 'confianza' y 'usar'. Hay que tirarlas antes de
-        # cruzar: si no, pandas renombra a clase_x / clase_y y la etiqueta
+        # maquina en 'conducta', 'confianza' y 'usar'. Hay que tirarlas antes de
+        # cruzar: si no, pandas renombra a conducta_x / conducta_y y la etiqueta
         # humana desaparece. La verdad es la hoja manual, nunca la propuesta.
-        r = r.drop(columns=[c for c in ('clase', 'confianza', 'usar') if c in r.columns])
+        r = r.drop(columns=[c for c in ('conducta', 'confianza', 'usar') if c in r.columns])
         j = r.merge(e[cols], on=['bloque', 'especimen'], how='inner')
         if 'video' not in j.columns:
             j['video'] = os.path.splitext(os.path.basename(rr))[0]
@@ -63,20 +63,20 @@ def cargar(pares, usar_dudosas):
               % (os.path.basename(rr), n0, len(j)))
         trozos.append(j)
     d = pd.concat(trozos, ignore_index=True)
-    # Una casilla de clase vacia significa "ni viendolo lo tengo claro". Es una
+    # Una casilla de conducta vacia significa "ni viendolo lo tengo claro". Es una
     # respuesta valida del revisor y se descarta: vale mas una etiqueta menos
     # que una inventada.
     # fillna antes de astype: con pandas 3.0 astype(str) conserva los vacios
     # como nulos en vez de convertirlos en el texto 'nan', y se colarian.
-    d['clase'] = d['clase'].fillna('').astype(str).str.strip().str.lower()
-    vacias = d['clase'].isin(('', 'nan', 'none'))
+    d['conducta'] = d['conducta'].fillna('').astype(str).str.strip().str.lower()
+    vacias = d['conducta'].isin(('', 'nan', 'none'))
     if vacias.any():
         print('  %d bloques sin decidir, se descartan' % int(vacias.sum()))
         d = d[~vacias]
-    malas = ~d['clase'].isin(('inmovilidad', 'nado', 'escalamiento', 'activa'))
+    malas = ~d['conducta'].isin(('inmovilidad', 'nado', 'escalamiento', 'activa'))
     if malas.any():
-        raise SystemExit('hay clases mal escritas: %s\nSolo valen inmovilidad, '
-                         'nado, escalamiento y activa.' % sorted(set(d.loc[malas, 'clase'])))
+        raise SystemExit('hay conductas mal escritas: %s\nSolo valen inmovilidad, '
+                         'nado, escalamiento y activa.' % sorted(set(d.loc[malas, 'conducta'])))
     d = d.dropna(subset=lib.RASGOS)
     return d
 
@@ -113,11 +113,11 @@ def main():
     # 'activa' = no inmovil, sin decidir si nada o trepa. No sirve para el
     # modelo de tres conductas, pero si para el nivel de Porsolt (inmovil /
     # activa), que se evalua aparte mas abajo con TODAS las filas.
-    d = todo[todo['clase'] != 'activa'].reset_index(drop=True)
+    d = todo[todo['conducta'] != 'activa'].reset_index(drop=True)
     n_act = len(todo) - len(d)
-    print('\n%d bloques utiles, %d videos, %d clases'
-          % (len(d), d['video'].nunique(), d['clase'].nunique()))
-    print(d['clase'].value_counts().to_string())
+    print('\n%d bloques utiles, %d videos, %d conductas'
+          % (len(d), d['video'].nunique(), d['conducta'].nunique()))
+    print(d['conducta'].value_counts().to_string())
     if n_act:
         print('activa (fuera del modelo de 3 conductas): %d' % n_act)
     if len(d) < 60:
@@ -129,7 +129,7 @@ def main():
                                  classification_report, confusion_matrix)
 
     X = d[lib.RASGOS].to_numpy(float)
-    y = d['clase'].to_numpy()
+    y = d['conducta'].to_numpy()
     if d['video'].nunique() > 1:
         grupos, como = d['video'].to_numpy(), 'video'
     else:
@@ -143,19 +143,19 @@ def main():
     print('\nvalidando por %s, en %d partes' % (como, k))
     pred = cross_val_predict(clf, X, y, groups=grupos, cv=GroupKFold(n_splits=k))
     rep = classification_report(y, pred, output_dict=True, zero_division=0)
-    clases = sorted(pd.unique(y))
+    conductas = sorted(pd.unique(y))
 
-    print('\n  adivinar la clase mas comun : %.3f'
+    print('\n  adivinar la conducta mas comun : %.3f'
           % pd.Series(y).value_counts(normalize=True).max())
     print('  exactitud                   : %.3f' % accuracy_score(y, pred))
     print('  kappa                       : %+.3f' % cohen_kappa_score(y, pred))
-    for c in clases:
+    for c in conductas:
         print('  acierto en %-14s   : %.3f' % (c, rep[c]['f1-score']))
 
-    cm = confusion_matrix(y, pred, labels=clases)
+    cm = confusion_matrix(y, pred, labels=conductas)
     print('\n  confusion (fila = tu etiqueta, columna = la del modelo):')
-    print('  ' + ' ' * 14 + ''.join('%12s' % c[:10] for c in clases))
-    for i, c in enumerate(clases):
+    print('  ' + ' ' * 14 + ''.join('%12s' % c[:10] for c in conductas))
+    for i, c in enumerate(conductas):
         print('  %-14s' % c + ''.join('%12d' % v for v in cm[i]))
 
     # Nivel Porsolt: inmovil contra activa (nado + escalamiento). Es la medida
@@ -164,13 +164,13 @@ def main():
     gt = (todo['video'].to_numpy() if como == 'video' else
           ('v' + todo['video'].astype(str) + '_a' + todo['especimen'].astype(str)).to_numpy())
     Xt = todo[lib.RASGOS].to_numpy(float)
-    yt = np.where(todo['clase'].to_numpy() == 'inmovilidad', 'inmovil', 'activa')
+    yt = np.where(todo['conducta'].to_numpy() == 'inmovilidad', 'inmovil', 'activa')
     pt = np.empty(len(todo), dtype=object)
     for tr, te in GroupKFold(n_splits=min(pd.unique(gt).size, 5)).split(Xt, yt, gt):
-        tr = tr[todo['clase'].to_numpy()[tr] != 'activa']
+        tr = tr[todo['conducta'].to_numpy()[tr] != 'activa']
         m = HistGradientBoostingClassifier(max_iter=300, learning_rate=0.06,
                                            max_leaf_nodes=15, l2_regularization=1.0,
-                                           random_state=0).fit(Xt[tr], todo['clase'].to_numpy()[tr])
+                                           random_state=0).fit(Xt[tr], todo['conducta'].to_numpy()[tr])
         pt[te] = np.where(m.predict(Xt[te]) == 'inmovilidad', 'inmovil', 'activa')
     print('\n  nivel Porsolt, inmovil contra activa (%d bloques, incluye los "activa"):'
           % len(todo))
@@ -203,7 +203,7 @@ def main():
         print('\nextraidos con --paso=%d' % pasos[0])
     joblib.dump(dict(modelo=clf, caracteristicas=list(lib.RASGOS),
                      paso=int(pasos[0]) if pasos else None,
-                     clases=list(clf.classes_), n_bloques=len(d),
+                     conductas=list(clf.classes_), n_bloques=len(d),
                      videos=sorted(pd.unique(d['video']).tolist())), args.salida)
     print('\nmodelo -> %s' % args.salida)
     print('usalo asi:  py etiquetar.py nuevo.MOV --modelo %s --tubos 4' % args.salida)

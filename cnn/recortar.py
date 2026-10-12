@@ -64,10 +64,10 @@ def tabla(nombre, carpeta):
     if faltan:
         raise ValueError('%s_rasgos.csv no trae %s; vuelve a pasarlo por '
                          'etiquetar.py' % (nombre, faltan))
-    mc = ['bloque', 'especimen', 'clase'] + (['confianza'] if 'confianza' in m.columns else [])
+    mc = ['bloque', 'especimen', 'conducta'] + (['confianza'] if 'confianza' in m.columns else [])
     d = r[cols].merge(m[mc], on=['bloque', 'especimen'], how='inner')
-    d['clase'] = d['clase'].fillna('').astype(str).str.strip().str.lower()
-    d = d[d['clase'].isin(('inmovilidad', 'nado', 'escalamiento', 'activa'))]
+    d['conducta'] = d['conducta'].fillna('').astype(str).str.strip().str.lower()
+    d = d[d['conducta'].isin(('inmovilidad', 'nado', 'escalamiento', 'activa'))]
     if 'confianza' not in d.columns:
         d['confianza'] = ''
     if 'rotar' not in d.columns:
@@ -176,7 +176,7 @@ def main():
         if not completos.all():
             print('  %-16s %d bloques incompletos, se descartan' % (n, (~completos).sum()))
         d, X = d[completos].reset_index(drop=True), X[completos]
-        np.savez_compressed(dest, X=X, clase=d['clase'].to_numpy(str),
+        np.savez_compressed(dest, X=X, conducta=d['conducta'].to_numpy(str),
                             confianza=d['confianza'].fillna('').astype(str).to_numpy(str),
                             especimen=d['especimen'].to_numpy(int),
                             bloque=d['bloque'].to_numpy(int), video=n)

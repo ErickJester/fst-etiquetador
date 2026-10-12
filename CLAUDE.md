@@ -157,8 +157,8 @@ mezclar.
   9999 px deja de pintarse en Chrome mientras el `<video>` se reproduce.
 - La hoja que guarda trae `origen`: `humano_confirma`, `humano_corrige`,
   `humano_duda` (casilla vacia) o `maquina` (bloque seguro que nadie miro).
-- `entrenar.py` tira `clase/confianza/usar` de los rasgos antes de cruzar. Si
-  no, pandas renombra a `clase_x/clase_y` y la etiqueta humana se pierde.
+- `entrenar.py` tira `conducta/confianza/usar` de los rasgos antes de cruzar. Si
+  no, pandas renombra a `conducta_x/conducta_y` y la etiqueta humana se pierde.
 - Con pandas 3.0, `astype(str)` conserva los vacios como nulos. Hay que hacer
   `fillna('')` antes, o el "no se" del revisor rompe el entrenamiento.
 
@@ -193,7 +193,8 @@ de tiempo, contadores) y guarda su progreso aparte; sus filas salen con
 
 ## CNN (carpeta cnn/)
 
-La tesis pide una CNN. El etiquetador (Random Forest sobre rasgos) fabrico el
+La tesis pide una CNN. El etiquetador (HistGradientBoostingClassifier sobre
+rasgos; NO es Random Forest, nunca lo fue) fabrico el
 conjunto de datos; la CNN es el clasificador final y se compara contra el.
 
 - `cnn/recortar.py` corre donde estan los videos (CPU, ~1 min por video). Por
@@ -263,7 +264,7 @@ revisor por bloques).
   visto sale como `humano_*`; lo pintado hacia adelante sin verlo sale como
   `sin_revisar`. Desde cero sale `humano_ciego`.
 - Hoja: `<video>_seg.csv` con especimen, segundo (1..N), inicio_s, tiempo,
-  clase, origen, propuesta. N = floor(duracion del video).
+  conducta, origen, propuesta. N = floor(duracion del video).
 
 Fase 2 hecha (sin etiquetar a mano por segundo):
 - `etiquetar.py` guarda `X_cuadros.csv` (medidas por fotograma + geometria y
@@ -288,3 +289,84 @@ Fase 2 hecha (sin etiquetar a mano por segundo):
   exactitud 0.910, kappa +0.830, F1 esc 0.82 / inm 0.90 / nado 0.93.
   OJO: sigue siendo mayoria por bloque contra el bloque humano. NO hay
   ninguna medida segundo contra segundo: no existe ningun `_seg.csv` humano.
+
+## ALERTA (2026-10-04): las notas contra `_mano.csv` son circulares
+
+De 3449 filas de `_mano.csv`, 3345 (97%) son `origen = maquina`: la propuesta
+del modelo que nadie miro (conducta == propuesta en el 100%). Solo 104 son
+humanas (59 confirma, 45 corrige). Medir contra todo eso es medir al modelo
+contra si mismo: por eso salen 0.978 (bloque) y 0.910 (segundos).
+Solo contra las 103 filas humanas de 3 conductas, validando por video:
+modelo por bloque exactitud 0.660 kappa +0.380 (F1 esc 0.44 inm 0.72 nado
+0.61); segundos con mayoria 0.583 kappa +0.233. Pero esas filas son las
+DUDOSAS (las que el revisor manda a mirar), asi que esa cifra es pesimista.
+La verdadera esta entre ambas y no se conoce. La CNN tambien se entreno y
+valido con estas etiquetas: sus kappas (+0.625 v4) heredan el problema.
+Arreglo: etiquetar una muestra al azar en modo "desde cero" (ciego).
+
+Primera prueba ciega (2026-10-04): `AcuBN1_seg.csv`, especimen 1, 371 s
+`humano_ciego`. Modelo entrenado sin AcuBN1:
+- segundo a segundo: exactitud 0.623, kappa +0.419 (F1 esc 0.62 inm 0.67 nado 0.58)
+- por bloque (mayoria de los segundos del usuario): 0.686, kappa +0.521
+- la etiqueta vieja de `_mano.csv` contra el ciego: 0.671. O sea, las
+  etiquetas de entrenamiento discrepan del criterio actual del usuario en 1
+  de cada 3 bloques; el modelo copia bien unas etiquetas que estan mal.
+- Confusion principal: inmovilidad del usuario -> nado de la maquina (54 de
+  139 s), y nado <-> escalamiento (25 y 35 s).
+Segundo ciego: `acu-yintang1_seg3.csv` (especimen 3, 325 s): segundo a
+segundo 0.525 kappa +0.238; por bloque 0.509; etiqueta vieja vs ciego 0.527.
+Confusion inm <-> nado en ambos sentidos (41 y 56 s).
+JUNTOS (645 s, 125 bloques): segundo a segundo 0.581 kappa +0.343 (F1 esc
+0.62 inm 0.61 nado 0.54); por bloque 0.608; etiqueta vieja vs ciego 0.608.
+Conclusion: el modelo reproduce las etiquetas viejas casi exacto, y esas
+etiquetas coinciden con el criterio ciego del usuario solo ~60%. Hay que
+reentrenar con etiquetas humanas por segundo, no con `_mano.csv`.
+Convencion: una hoja ciega por especimen se guarda como `X_segN.csv`.
+El script de la medida ciega esta en el scratchpad de la sesion; pasarlo a
+`segundos.py` (accion `ciego`) cuando se reentrene.
+
+## CNN por segundo (fase 3, codigo listo, SIN entrenar de verdad)
+
+Archivos aparte; los de bloques (`recortar.py`, `fst_cnn.py`, `probar.py`)
+no se tocaron.
+- `cnn/recortar_seg.py`: lee `X_seg*.csv`, usa SOLO filas `humano_*` con
+  conducta. Guarda por rata la pelicula entera del tubo a 4 fps (no un clip por
+  segundo: los vecinos se pisan 75%), mas los 15 rasgos de la ventana de 4 s
+  (`lib.segundos` sobre `_cuadros.csv`). Recuadro interpolado en el tiempo
+  entre centros de bloque; los absurdos (>1.5x el tamano tipico: IMG_0846,
+  acu-yintang1 bloque 1) se ignoran. ~1 min por video, 15-25 MB. Deja
+  `clips_seg/`.
+- `cnn/fst_cnn_seg.py`: misma red 'fusion' de `fst_cnn.py` (la importa).
+  Clip del segundo k = 16 fotogramas de k-1.5 a k+2.5 s, corrido hacia dentro
+  en los bordes. `Ventanas` arma los clips al vuelo. Valida por video e
+  imprime: segundo contra segundo, mayoria por bloque, segundos por conducta
+  por rata. `cada=2` entrena con medio conjunto si Colab se corta.
+- `cnn/fst_cnn_seg.ipynb`: cuaderno; en Drive hacen falta `fst_cnn.py`,
+  `fst_cnn_seg.py` y `clips_seg/`.
+- `cnn/probar_seg.py X_rasgos.csv --red fst_cnn_seg.pt`: deja `X_cnnseg.csv`
+  (formato de `_segundos.csv`, lo abre revisor_segundos) y
+  `X_cnnseg_resumen.csv`. Rechaza redes por bloque.
+- Probado: `recortar_seg.py` en AcuBN1 y acu-yintang1 (956 s, muestras
+  revisadas a ojo, la rata cae en el recorte). SIN probar: `fst_cnn_seg.py`
+  y `probar_seg.py`; la prueba local se cancelo a pedido del usuario (en CPU
+  pasaba de 11 min). El primer arranque real sera en Colab: si truena, el
+  error saldra ahi. No hay ninguna nota.
+
+## Vocabulario: "conducta", nunca "clase" (regla estricta del usuario, 2026-10-06)
+
+Inmovilidad, nado, escalamiento y activa son CONDUCTAS. No llamarlas "clase"
+ni al hablar ni en el codigo. Se renombro todo: columna `conducta` (y
+`conducta_bloque`) en los CSV, `CONDUCTAS` en el codigo, clave `conductas` en
+`modelo_fst.joblib` y en las redes `.pt`, clave `conducta` en los `.npz`.
+Lo guardado antes del cambio se sigue leyendo: `modelo_fst.joblib` (clave
+`clases`), clips `.npz` de Drive (clave `clase`), hojas viejas en los dos
+revisores (columna `clase`) y el progreso guardado en el navegador.
+Los programas de Python NO aceptan CSV con la columna vieja: los 50 de
+`etiquetas/` ya se convirtieron; `respaldo/` se dejo como estaba.
+
+## Salida del modelo hacia el sistema (regla estricta del usuario, 2026-10-08)
+
+Lo unico que el modelo entrenado le entrega al sistema completo son las
+conductas. Nada de confianza, probabilidades ni otras salidas. Es lo unico que
+debe salir del modelo. Lo interno (umbral, `p_*`, `confianza` en los CSV de
+trabajo) no forma parte del contrato con el sistema ni de su diagrama de clases.

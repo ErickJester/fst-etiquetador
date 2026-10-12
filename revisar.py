@@ -12,7 +12,7 @@ Por defecto solo saca los bloques donde el programa dudo (usar = 0). Con
 --todos saca los 5 minutos completos, por si quieres revisar de cero.
 
 Como se rellena la hoja: los bloques seguros vienen ya escritos con la
-propuesta del programa. Los dudosos vienen con la casilla 'clase' VACIA. Ves su
+propuesta del programa. Los dudosos vienen con la casilla 'conducta' VACIA. Ves su
 videito, escribes una de las tres palabras, y guardas.
 
     inmovilidad    flota, solo mueve lo justo para respirar, no cambia de sitio
@@ -31,7 +31,7 @@ import numpy as np
 import pandas as pd
 
 BLOQUE_S = 5.0
-CLASES = ['inmovilidad', 'nado', 'escalamiento']
+CONDUCTAS = ['inmovilidad', 'nado', 'escalamiento']
 
 
 def main():
@@ -48,7 +48,7 @@ def main():
 
     d = pd.read_csv(args.rasgos, encoding='utf-8-sig')
     nombre = os.path.splitext(os.path.basename(args.video))[0]
-    if 'clase' not in d.columns:
+    if 'conducta' not in d.columns:
         raise SystemExit('ese CSV no tiene etiquetas; corre etiquetar.py con --modelo')
 
     dudosos = d if args.todos else d[d.get('usar', 1) == 0]
@@ -90,7 +90,7 @@ def main():
             cv2.rectangle(fr, (0, 0), (dim[0], 34), (0, 0, 0), -1)
             cv2.putText(fr, 'bloque %d  tubo %d  %.0f-%.0f s   propuesta: %s (%.2f)'
                         % (r.bloque, r.especimen, t0, t0 + BLOQUE_S,
-                           r.clase, r.get('confianza', float('nan'))),
+                           r.conducta, r.get('confianza', float('nan'))),
                         (8, 24), cv2.FONT_HERSHEY_SIMPLEX, .6, (255, 255, 255), 1)
             out.write(fr)
         out.release()
@@ -101,13 +101,13 @@ def main():
     # --- la hoja ---
     hoja = d[['bloque', 'especimen']].copy()
     hoja['inicio_s'] = (d['bloque'] - 1) * BLOQUE_S
-    hoja['propuesta'] = d['clase']
+    hoja['propuesta'] = d['conducta']
     hoja['seguridad'] = d.get('confianza')
     a_revisar = d.get('usar', pd.Series(1, index=d.index)) == 0
     if args.todos:
         a_revisar[:] = True
     # los seguros ya vienen escritos; los dudosos, en blanco para que los pongas tu
-    hoja['clase'] = d['clase'].where(~a_revisar, '')
+    hoja['conducta'] = d['conducta'].where(~a_revisar, '')
     hoja['videito'] = np.where(
         a_revisar, ['b%03d_tubo%d.mp4' % (b, s)
                     for b, s in zip(d['bloque'], d['especimen'])], '')
@@ -122,10 +122,10 @@ def main():
     print('\nvideitos -> %s' % carpeta)
     print('hoja     -> %s' % destino)
     print('\nQUE HACER AHORA:')
-    print('  1. Abre la hoja. Filtra las filas con la casilla "clase" vacia.')
+    print('  1. Abre la hoja. Filtra las filas con la casilla "conducta" vacia.')
     print('  2. Por cada una, abre el videito que dice la columna "videito".')
-    print('  3. Escribe en "clase" una de estas tres palabras:')
-    for c in CLASES:
+    print('  3. Escribe en "conducta" una de estas tres palabras:')
+    for c in CONDUCTAS:
         print('       %s' % c)
     print('  4. Si no se entiende ni viendolo, dejalo vacio. Se descarta.')
     print('  5. Guarda en el mismo sitio y con el mismo nombre.')

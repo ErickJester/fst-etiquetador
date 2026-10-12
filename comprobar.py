@@ -95,8 +95,8 @@ elif not faltan:
             paq = joblib.load(mp)
             incompat = any('version' in str(x.message).lower() for x in w)
         cols = paq.get('caracteristicas')
-        clases = paq.get('clases')
-        if not cols or not clases:
+        conductas = paq.get('conductas', paq.get('clases'))   # modelos viejos: 'clases'
+        if not cols or not conductas:
             linea(MAL, 'modelo_fst.joblib', 'no guarda sus columnas')
             fallas.append('El modelo esta incompleto. Reentrenalo.')
         elif incompat:
@@ -107,7 +107,7 @@ elif not faltan:
                           '     py entrenar.py etiquetas/IMG_0826_rasgos.csv=etiquetas/IMG_0826_mano.csv' % sk_ver)
         else:
             linea(OK, 'modelo_fst.joblib',
-                  '%d columnas, clases: %s' % (len(cols), ', '.join(clases)))
+                  '%d columnas, conductas: %s' % (len(cols), ', '.join(conductas)))
     except Exception as e:
         linea(MAL, 'modelo_fst.joblib', str(e)[:40])
         # El caso tipico: modelo guardado con numpy 2 y abierto con numpy 1.x,
