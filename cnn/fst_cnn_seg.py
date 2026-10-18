@@ -44,8 +44,12 @@ import fst_cnn
 from fst_cnn import CONDUCTAS
 
 fst_cnn.ENTRADA = 'fusion'
-VERSION_SEG = 1
-print('fst_cnn_seg version %d cargada (red de fst_cnn version %d)' % (VERSION_SEG, fst_cnn.VERSION))
+# Formato x.x.x. Sube el numero con cada cambio; se imprime al cargar para
+# confirmar que Colab lee la copia nueva de Drive.
+#   0.1.0  primera version: red 'fusion' por segundo, validacion por video
+# 1.0.0 queda reservada para cuando este completamente probado y listo para produccion.
+VERSION_SEG = '0.1.0'
+print('fst_cnn_seg version %s cargada (red de fst_cnn version %s)' % (VERSION_SEG, fst_cnn.VERSION))
 
 
 class Ventanas:

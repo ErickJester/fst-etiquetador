@@ -60,7 +60,8 @@ from sklearn.metrics import cohen_kappa_score, confusion_matrix
 #   3  mapas de movimiento (kappa +0.574 con 8 fotogramas, +0.580 con 16)
 #   4  CNN 3D R(2+1)D-18 preentrenada en Kinetics (kappa +0.625)
 #   5  fusion: CNN 3D + rasgos del etiquetador + reglas de pataleo y nariz
-VERSION = 5
+# Formato x.x.x. Las versiones 1 a 5 de arriba son las 1.0.0 a 5.0.0.
+VERSION = '5.0.0'
 
 CONDUCTAS = ['escalamiento', 'inmovilidad', 'nado']
 MEDIA, DESV = 0.45, 0.225
@@ -85,7 +86,7 @@ REGLAS = ['tras_media', 'tras_max', 'tras_abrupto', 'del_media',
 AGUA = 0.30
 
 
-print('fst_cnn version %d cargada' % VERSION)
+print('fst_cnn version %s cargada' % VERSION)
 
 
 def cargar(carpeta, usar_dudosas=False):
@@ -355,7 +356,7 @@ def validar(carpeta, partes=5, epocas=None, usar_dudosas=False):
     y = np.array([CONDUCTAS.index(c) if c in CONDUCTAS else -1 for c in conducta])
     P = np.full((len(X), len(CONDUCTAS)), np.nan)
     gk = GroupKFold(n_splits=min(partes, len(set(video))))
-    print('\nfst_cnn version %d, entrada %s' % (VERSION, ENTRADA))
+    print('\nfst_cnn version %s, entrada %s' % (VERSION, ENTRADA))
     print('validando por video, en %d partes (%s)' % (gk.n_splits, dispositivo()))
     for k, (tr, te) in enumerate(gk.split(X, y, video)):
         tr = tr[tres[tr]]
@@ -425,7 +426,7 @@ def final(carpeta, destino, epocas=None, usar_dudosas=False):
     M = medidas(carpeta, X, video, meta) if ENTRADA == 'fusion' else None
     tres = np.isin(conducta, CONDUCTAS)
     y = np.array([CONDUCTAS.index(c) for c in conducta[tres]])
-    print('\nfst_cnn version %d, entrada %s' % (VERSION, ENTRADA))
+    print('\nfst_cnn version %s, entrada %s' % (VERSION, ENTRADA))
     print('entrenando la red final con %d clips (%s)' % (tres.sum(), dispositivo()))
     m = entrenar(X[tres], y, epocas=epocas, M=None if M is None else M[tres])
     torch.save(dict(pesos=m.state_dict(), conductas=CONDUCTAS, frames=X.shape[1],

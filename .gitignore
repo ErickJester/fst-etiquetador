@@ -27,6 +27,7 @@ revision/
 # Clips para la CNN: se regeneran con cnn/recortar.py y pesan cientos de MB.
 # Viven en Google Drive, no aqui. Lo mismo las redes entrenadas.
 clips/
+clips_seg/
 *.pt
 
 # Copias locales antes de regenerar (git ya guarda las versiones anteriores)
