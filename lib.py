@@ -124,6 +124,20 @@ def sin_girar(pts, W, H, rot=None):
     return pts
 
 
+def girar(pts, W, H, rot=None):
+    """Lo inverso de sin_girar: lleva puntos del video tal como esta guardado
+    (y como lo muestra el navegador) al fotograma enderezado (W x H)."""
+    rot = ROT if rot is None else rot
+    x, y = pts[:, 0], pts[:, 1]
+    if rot == 90:
+        return np.stack([W - 1 - y, x], axis=1)
+    if rot == 270:
+        return np.stack([y, H - 1 - x], axis=1)
+    if rot == 180:
+        return np.stack([W - 1 - x, H - 1 - y], axis=1)
+    return pts
+
+
 def info_video(ruta):
     cap = abrir(ruta)
     if not cap.isOpened():
@@ -397,11 +411,177 @@ def dibujar_geometria(ruta, lut, WH, g, destino):
     cv2.imwrite(destino, im, [cv2.IMWRITE_JPEG_QUALITY, 90])
 
 
+# ----------------- correcciones de recuadro (--correccion) -----------------
+#
+# Un recuadro corregido por una persona llega en coordenadas del video TAL COMO
+# SE VE (como bx0..by1 de cajas_crudas), y toda la geometria vive en el marco
+# estabilizado. Aqui esta el camino inverso. Una correccion cambia la geometria
+# de UN tubo (columnas y filas) desde un instante; antes y en los demas tubos
+# no cambia nada. 'linea' es {tubo: [(t_desde, geo), ...]} ordenada por t_desde.
+
+def geo_base(g, s):
+    """La geometria automatica del tubo s, con las mismas claves que una correccion."""
+    x0, x1 = g['tubos'][s]
+    return dict(x0=int(x0), x1=int(x1), y_agua=g['y_agua'], y_fondo=g['y_fondo'],
+                roi_arriba=g['roi_arriba'], roi_abajo=g['roi_abajo'])
+
+
+def geo_en(g, linea, s, t):
+    """La geometria del tubo s en el instante t (s): la automatica, o la de la
+    ultima correccion que ya empezo."""
+    geo = geo_base(g, s)
+    for t0, c in linea.get(s, ()):
+        if t >= t0:
+            geo = c
+        else:
+            break
+    return geo
+
+
+def filas_de_recuadro(y_agua, y_fondo):
+    """(arriba, abajo) del recuadro de un tubo a partir de su linea de agua y su
+    fondo: las proporciones de detectar_geometria() y cajas_crudas()."""
+    col = y_fondo - y_agua
+    return max(0.0, y_agua - 0.45 * col), y_fondo + 0.05 * col
+
+
+def recuadro_a_marco(caja, lut, fps, desde_s, WH):
+    """Pasa un recuadro (x0, y0, x1, y1) del video TAL COMO SE VE al marco
+    estabilizado, con la matriz del fotograma mas cercano a desde_s. Es lo
+    inverso de cajas_crudas(): primero se deshace el giro de --rotar (girar) y
+    luego se aplica la matriz del registro. Devuelve la geometria de un tubo:
+    las columnas x0/x1 y las filas (agua, fondo y bordes de la zona medida),
+    con las mismas proporciones que usa detectar_geometria()."""
+    W, H = WH
+    idx = np.array(sorted(lut))
+    i = int(idx[np.argmin(np.abs(idx / fps - desde_s))])
+    M = np.asarray(lut[i], np.float64)
+    x0, y0, x1, y1 = (float(v) for v in caja)
+    esq = np.array([[x0, y0], [x1, y0], [x0, y1], [x1, y1]], np.float64)
+    if ROT:
+        esq = girar(esq, W, H)
+    # cajas_crudas() guarda el rectangulo MINIMO que envuelve al tubo ya girado por
+    # el registro, que es un poco mas grande que el tubo. Aqui se deshace eso: el
+    # centro se lleva con la matriz y el tamano verdadero (w, h) se despeja de
+    #   ancho = k (w |cos| + h |sen|)    alto = k (w |sen| + h |cos|)
+    # donde k = 1/escala del registro y el angulo es el de la matriz. Con giros de
+    # fracciones de grado el efecto es de unos pocos pixeles, pero asi una
+    # correccion igual al recuadro automatico vuelve a dar la geometria automatica.
+    cx_, cy_ = (esq[:, 0].min() + esq[:, 0].max()) / 2, (esq[:, 1].min() + esq[:, 1].max()) / 2
+    ancho_o, alto_o = float(esq[:, 0].max() - esq[:, 0].min()), float(esq[:, 1].max() - esq[:, 1].min())
+    c = M[:, :2] @ np.array([cx_, cy_]) + M[:, 2]
+    s = float(np.sqrt(abs(np.linalg.det(M[:, :2]))))
+    th = float(np.arctan2(M[1, 0], M[0, 0]))
+    ca, sa = abs(np.cos(th)), abs(np.sin(th))
+    det = ca * ca - sa * sa
+    if abs(det) > 0.2:
+        w = s * (ca * ancho_o - sa * alto_o) / det
+        h = s * (ca * alto_o - sa * ancho_o) / det
+        q = np.array([[c[0] - w / 2, c[1] - h / 2], [c[0] + w / 2, c[1] + h / 2]])
+    else:                                   # giro enorme (no pasa): solo se mapean las esquinas
+        q = esq @ M[:, :2].T + M[:, 2]
+    arriba, abajo = float(q[:, 1].min()), float(q[:, 1].max())
+    # arriba = agua - 0.45 col  y  abajo = fondo + 0.05 col = agua + 1.05 col
+    col = (abajo - arriba) / 1.5
+    y_agua = arriba + 0.45 * col
+    xa = int(round(max(0.0, float(q[:, 0].min()))))
+    xb = int(round(min(W - 1.0, float(q[:, 0].max()))))
+    if xb - xa < 10 or col < 20:
+        raise ValueError('el recuadro corregido es demasiado chico o queda fuera de la imagen: %s' % (tuple(caja),))
+    return dict(x0=xa, x1=xb, y_agua=y_agua, y_fondo=y_agua + col,
+                roi_arriba=int(round(max(0.0, arriba))), roi_abajo=int(round(min(H - 1.0, abajo))))
+
+
+def leer_correcciones(ruta):
+    """Lee el JSON de --correccion: [{"cilindro", "desde_segundo", "x0", "y0", "x1", "y1"}, ...]
+    con las coordenadas del video tal como se ve. Revisa la forma antes de gastar
+    minutos en el video."""
+    import json
+    try:
+        with open(ruta, encoding='utf-8') as f:
+            lista = json.load(f)
+    except (OSError, ValueError) as e:
+        raise SystemExit('--correccion: no se pudo leer %s: %s' % (ruta, e))
+    if not isinstance(lista, list):
+        raise SystemExit('--correccion: %s debe ser una lista de correcciones' % ruta)
+    out = []
+    for n, c in enumerate(lista, 1):
+        try:
+            c = dict(cilindro=int(c['cilindro']), desde_segundo=float(c['desde_segundo']),
+                     x0=float(c['x0']), y0=float(c['y0']), x1=float(c['x1']), y1=float(c['y1']))
+        except (KeyError, TypeError, ValueError) as e:
+            raise SystemExit('--correccion: la correccion %d no trae cilindro, desde_segundo, x0, y0, x1 y y1 '
+                             'numericos (%s)' % (n, e))
+        if not (c['x0'] < c['x1'] and c['y0'] < c['y1'] and c['desde_segundo'] >= 0):
+            raise SystemExit('--correccion: la correccion %d tiene un recuadro vacio o un instante negativo' % n)
+        out.append(c)
+    return out
+
+
+def linea_de_correcciones(correcciones, g, lut, fps, WH, log=print):
+    """Arma {tubo: [(t_desde, geo), ...]} con las correcciones en orden de
+    desde_segundo (varias del mismo tubo se aplican una tras otra)."""
+    linea = {}
+    for c in sorted(correcciones, key=lambda c: c['desde_segundo']):
+        s = c['cilindro']
+        if s not in g['tubos']:
+            raise SystemExit('--correccion: el cilindro %d no existe (hay %s)' % (s, sorted(g['tubos'])))
+        geo = recuadro_a_marco((c['x0'], c['y0'], c['x1'], c['y1']), lut, fps, c['desde_segundo'], WH)
+        linea.setdefault(s, []).append((c['desde_segundo'], geo))
+        log('      correccion: tubo %d desde %.1f s -> columnas %d-%d, agua y=%.0f, fondo y=%.0f'
+            % (s, c['desde_segundo'], geo['x0'], geo['x1'], geo['y_agua'], geo['y_fondo']))
+    return linea
+
+
 # ----------------- 4. extraccion por fotograma -----------------
 
-def extraer(ruta, lut, WH, fondo, g, fps, log=print):
+def _forma(wi, dif, t, s, x0, x1, ya, ra, rb):
+    """Segmenta al animal dentro del recuadro de un tubo en un fotograma y mide
+    su forma. Devuelve (fila, recorte, mascara)."""
+    roi = wi[ra:rb, x0:x1]
+    m = ((dif[ra:rb, x0:x1] > DIFF_THR) & (roi > BRIGHT_THR)).astype(np.uint8)
+    m = cv2.morphologyEx(m, cv2.MORPH_OPEN, K5)
+    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, K9)
+    blob, st, cen = mayor_componente(m)
+
+    r = dict(t=t, s=s, cx=np.nan, cy=np.nan, area=np.nan, above=np.nan,
+             largo=np.nan, vert=np.nan, elong=np.nan, cabeza=np.nan,
+             me=np.nan, iou=np.nan, dice=np.nan)
+    if blob is not None:
+        r['cx'] = cen[0] + x0
+        r['cy'] = cen[1] + ra
+        r['area'] = float(st[cv2.CC_STAT_AREA])
+        r['above'] = float(blob[:int(max(0, ya - ra)), :].sum())
+        nucleo, _, _ = mayor_componente(cv2.erode(blob, ER))
+        if nucleo is not None:
+            bm = cv2.dilate(nucleo, ER) & blob
+            M = cv2.moments(bm, binaryImage=True)
+            if M['m00'] > 200:
+                u20, u02 = M['mu20'] / M['m00'], M['mu02'] / M['m00']
+                u11 = M['mu11'] / M['m00']
+                th = 0.5 * np.arctan2(2 * u11, u20 - u02)
+                d = np.sqrt(max((u20 - u02) ** 2 + 4 * u11 ** 2, 0))
+                l1 = (u20 + u02 + d) / 2
+                l2 = max((u20 + u02 - d) / 2, 1e-6)
+                ys, _ = np.nonzero(bm)
+                r['vert']   = float(abs(np.sin(th)))
+                r['elong']  = float(np.sqrt(l1 / l2))
+                r['cabeza'] = float(ys.min() + ra)
+                # largo del cuerpo = 4 sigma del eje mayor
+                r['largo']  = float(4 * np.sqrt(max(l1, 1e-6)))
+    return r, roi, blob
+
+
+def extraer(ruta, lut, WH, fondo, g, fps, log=print, linea=None, largos_auto=None):
     """Una fila por fotograma y tubo. Todo en px todavia; la normalizacion
-    por largo de cuerpo se hace al agregar en bloques."""
+    por largo de cuerpo se hace al agregar en bloques.
+
+    linea: correcciones de recuadro (linea_de_correcciones). Desde su instante,
+    el tubo corregido se mide con la geometria nueva; sin ella todo es igual.
+    largos_auto: si es una lista, se llena (un valor por fila de la salida) con
+    el largo del cuerpo medido SIEMPRE con la geometria automatica. Con eso la
+    escala del video (la mediana) no cambia por una correccion y los demas
+    tubos salen identicos."""
     W, H = WH
     bg = fondo.astype(np.int16)
     ya, ra, rb = g['y_agua'], g['roi_arriba'], g['roi_abajo']
@@ -410,7 +590,7 @@ def extraer(ruta, lut, WH, fondo, g, fps, log=print):
     # sino contra el mas cercano a DT_REF segundos atras, de modo que --paso
     # cambia el coste de calculo pero no los valores.
     from collections import deque
-    filas, hist = [], {}
+    filas, hist, firmas = [], {}, {}
     cap = abrir(ruta)
     for cur, fr in cap.cuadros(lambda c: c in lut):
         gr = cv2.cvtColor(fr, cv2.COLOR_BGR2GRAY)
@@ -421,37 +601,25 @@ def extraer(ruta, lut, WH, fondo, g, fps, log=print):
         t = cur / fps
 
         for s, (x0, x1) in g['tubos'].items():
-            roi = wi[ra:rb, x0:x1]
-            m = ((dif[ra:rb, x0:x1] > DIFF_THR) & (roi > BRIGHT_THR)).astype(np.uint8)
-            m = cv2.morphologyEx(m, cv2.MORPH_OPEN, K5)
-            m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, K9)
-            blob, st, cen = mayor_componente(m)
-
-            r = dict(t=t, s=s, cx=np.nan, cy=np.nan, area=np.nan, above=np.nan,
-                     largo=np.nan, vert=np.nan, elong=np.nan, cabeza=np.nan,
-                     me=np.nan, iou=np.nan, dice=np.nan)
-            if blob is not None:
-                r['cx'] = cen[0] + x0
-                r['cy'] = cen[1] + ra
-                r['area'] = float(st[cv2.CC_STAT_AREA])
-                r['above'] = float(blob[:max(0, ya - ra), :].sum())
-                nucleo, _, _ = mayor_componente(cv2.erode(blob, ER))
-                if nucleo is not None:
-                    bm = cv2.dilate(nucleo, ER) & blob
-                    M = cv2.moments(bm, binaryImage=True)
-                    if M['m00'] > 200:
-                        u20, u02 = M['mu20'] / M['m00'], M['mu02'] / M['m00']
-                        u11 = M['mu11'] / M['m00']
-                        th = 0.5 * np.arctan2(2 * u11, u20 - u02)
-                        d = np.sqrt(max((u20 - u02) ** 2 + 4 * u11 ** 2, 0))
-                        l1 = (u20 + u02 + d) / 2
-                        l2 = max((u20 + u02 - d) / 2, 1e-6)
-                        ys, _ = np.nonzero(bm)
-                        r['vert']   = float(abs(np.sin(th)))
-                        r['elong']  = float(np.sqrt(l1 / l2))
-                        r['cabeza'] = float(ys.min() + ra)
-                        # largo del cuerpo = 4 sigma del eje mayor
-                        r['largo']  = float(4 * np.sqrt(max(l1, 1e-6)))
+            ya_s, ra_s, rb_s = ya, ra, rb
+            corregido = False
+            if linea and s in linea:
+                geo = geo_en(g, linea, s, t)        # antes de la correccion es la automatica
+                x0, x1 = geo['x0'], geo['x1']
+                ya_s, ra_s, rb_s = geo['y_agua'], geo['roi_arriba'], geo['roi_abajo']
+                corregido = t >= linea[s][0][0]
+                firma = (x0, x1, ra_s, rb_s)
+                if firmas.get(s, firma) != firma:
+                    # el recorte cambio de lugar o de tamano: el historial de este tubo ya no es comparable
+                    hist.pop(s, None)
+                firmas[s] = firma
+            r, roi, blob = _forma(wi, dif, t, s, x0, x1, ya_s, ra_s, rb_s)
+            if largos_auto is not None:
+                if corregido:
+                    ax0, ax1 = g['tubos'][s]
+                    largos_auto.append(_forma(wi, dif, t, s, ax0, ax1, ya, ra, rb)[0]['largo'])
+                else:
+                    largos_auto.append(r['largo'])
             h = hist.setdefault(s, deque())
             # el fotograma mas reciente que quede al menos DT_REF atras; si el
             # historial aun no llega tan lejos, el mas antiguo disponible
@@ -485,9 +653,10 @@ def extraer(ruta, lut, WH, fondo, g, fps, log=print):
     return filas
 
 
-def cajas_crudas(bl, lut, g, fps, WH=None):
+def cajas_crudas(bl, lut, g, fps, WH=None, linea=None):
     """Anade bx0, by0, bx1, by1: el recuadro de cada tubo en coordenadas del
-    video TAL COMO SE VE, en el instante medio de cada bloque.
+    video TAL COMO SE VE, en el instante medio de cada bloque. Con 'linea'
+    (correcciones), un tubo corregido da el recuadro corregido desde su instante.
 
     Toda la geometria vive en el marco de referencia estabilizado. Eso sirve
     para medir, pero no para dibujar sobre el video original: si la camara se
@@ -505,7 +674,12 @@ def cajas_crudas(bl, lut, g, fps, WH=None):
         i = int(idx[np.argmin(np.abs(tiempos - medio))])
         inv = cv2.invertAffineTransform(np.asarray(lut[i], np.float64))
         x0, x1 = g['tubos'][int(s)]
-        esq = np.array([[x0, arriba], [x1, arriba], [x0, abajo], [x1, abajo]], np.float64)
+        arr, abj = arriba, abajo
+        if linea and int(s) in linea:
+            geo = geo_en(g, linea, int(s), medio)
+            x0, x1 = geo['x0'], geo['x1']
+            arr, abj = filas_de_recuadro(geo['y_agua'], geo['y_fondo'])
+        esq = np.array([[x0, arr], [x1, arr], [x0, abj], [x1, abj]], np.float64)
         q = esq @ inv[:, :2].T + inv[:, 2]
         if ROT:
             # y ademas deshacer el enderezado: el navegador muestra el video
@@ -575,26 +749,34 @@ def segundos(cuadros, ventana=VENTANA_S):
     fotograma medido y tubo, con la geometria y la escala del video. Un
     segundo k (de k a k+1 s) se describe con lo que paso entre
     k + 0.5 - ventana/2 y k + 0.5 + ventana/2: un segundo solo es muy poco
-    para distinguir flotar de nadar despacio."""
+    para distinguir flotar de nadar despacio.
+
+    La geometria (columnas del tubo, agua y fondo) se toma de las propias filas
+    de _cuadros.csv, la del fotograma central de cada ventana: si un tubo se
+    corrigio con --correccion, sus segundos posteriores usan la geometria nueva.
+    Sin correcciones esas columnas son constantes y sale lo mismo de siempre."""
     import pandas as pd
     escala = float(cuadros['escala'].iloc[0])
-    ya, yf = float(cuadros['g_agua'].iloc[0]), float(cuadros['g_fondo'].iloc[0])
     n_seg = int(np.floor(cuadros['t'].max() + 1e-6)) + 1
     out = []
     for s, d in cuadros.groupby('s'):
         d = d.sort_values('t').reset_index(drop=True)
-        tubo = (float(d['gx0'].iloc[0]), float(d['gx1'].iloc[0]))
         t = d['t'].to_numpy()
+        gx0, gx1 = d['gx0'].to_numpy(), d['gx1'].to_numpy()
+        gya, gyf = d['g_agua'].to_numpy(), d['g_fondo'].to_numpy()
         for k in range(n_seg):
             c = k + 0.5
             i0, i1 = np.searchsorted(t, [c - ventana / 2, c + ventana / 2])
+            m = min((i0 + i1) // 2, len(d) - 1)
+            tubo = (float(gx0[m]), float(gx1[m]))
+            ya, yf = float(gya[m]), float(gyf[m])
             r = dict(especimen=int(s), segundo=k + 1, inicio_s=k, n=int(i1 - i0))
             r.update(rasgos_tramo(d.iloc[i0:i1], tubo, ya, yf, escala))
             out.append(r)
     return pd.DataFrame(out)
 
 
-def bloques(filas, g, fps, escala=None, log=print):
+def bloques(filas, g, fps, escala=None, log=print, linea=None):
     """Agrega a bloques de 5 s y normaliza:
        distancias  -> en largos de cuerpo
        velocidades -> por segundo
@@ -602,7 +784,9 @@ def bloques(filas, g, fps, escala=None, log=print):
 
     'escala' es el largo tipico del cuerpo en px. Se calcula como la mediana
     de TODO el video, no de cada bloque, para que el ruido de un bloque no
-    altere su propia normalizacion."""
+    altere su propia normalizacion. Con 'linea' (correcciones de recuadro) un
+    bloque de un tubo corregido se mide con la geometria que tiene en su
+    instante medio."""
     import pandas as pd
     df = pd.DataFrame(filas)
     if escala is None:
@@ -618,14 +802,18 @@ def bloques(filas, g, fps, escala=None, log=print):
         cx, cy = d['cx'].to_numpy(), d['cy'].to_numpy()
         ok = ~np.isnan(cx)
         n_ok = int(ok.sum())
+        tubo_b, ya_b, yf_b = g['tubos'][s], ya, yf
+        if linea and s in linea:
+            geo = geo_en(g, linea, s, (b - 0.5) * BLOCK_S)
+            tubo_b, ya_b, yf_b = (geo['x0'], geo['x1']), geo['y_agua'], geo['y_fondo']
         r = dict(bloque=int(b), especimen=int(s),
                  t0=round((b - 1) * BLOCK_S, 2), t1=round(b * BLOCK_S, 2),
                  n=len(d), n_visto=n_ok, escala_px=round(escala, 1),
                  # Geometria detectada. Se guarda para que revisar.py pueda
                  # recortar y marcar el tubo sin reprocesar el video entero.
-                 gx0=int(g['tubos'][s][0]), gx1=int(g['tubos'][s][1]),
-                 g_agua=int(ya), g_fondo=int(yf))
-        r.update(rasgos_tramo(d, g['tubos'][s], ya, yf, escala))
+                 gx0=int(tubo_b[0]), gx1=int(tubo_b[1]),
+                 g_agua=int(ya_b), g_fondo=int(yf_b))
+        r.update(rasgos_tramo(d, tubo_b, ya_b, yf_b, escala))
         out.append(r)
     res = pd.DataFrame(out).sort_values(['especimen', 'bloque']).reset_index(drop=True)
     # El ultimo bloque casi nunca cabe completo (un video de 301 s deja 1 s

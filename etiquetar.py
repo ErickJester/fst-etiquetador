@@ -18,6 +18,24 @@ Opciones:
                         izquierda, derecha o 180. Elige hacia donde hay que
                         girar la imagen para que los cilindros queden de pie.
                         Si el video sale en vertical, el programa lo avisa.
+    --correccion F.json corrige el recuadro de uno o mas cilindros desde un
+                        instante (opcional; solo con videos, no con CSV). El
+                        JSON es una lista:
+                          [{"cilindro": 2, "desde_segundo": 142,
+                            "x0": 250, "y0": 480, "x1": 580, "y1": 930}]
+                        Las coordenadas son del video ORIGINAL, tal como se
+                        ve (las mismas de bx0..by1 de _rasgos.csv y de la
+                        imagen de la pausa del sistema). Se pasan al marco
+                        estabilizado con la transformacion del fotograma mas
+                        cercano a desde_segundo (y se deshace --rotar si lo
+                        hay). Desde ese instante ESE cilindro se mide con la
+                        geometria nueva (columnas y filas) y bx0..by1 de sus
+                        bloques salen corregidos. Antes de ese instante y en
+                        los demas cilindros no cambia NADA (ni la escala del
+                        video: se calcula con la geometria automatica). Se
+                        pueden dar varias correcciones del mismo cilindro;
+                        se aplican en orden de desde_segundo. Sin esta
+                        opcion la salida es identica a la de siempre.
 
 Por cada video deja:
     <nombre>_rasgos.csv        un renglon por bloque de 5 s y por especimen
@@ -126,30 +144,52 @@ def una(ruta, args, paq, log=print):
     fondo, occ = lib.fondo_y_ocupacion(ruta, lut, WH, fps, log=log)
     log('  3/5 buscando los tubos y la linea de agua')
     g = lib.detectar_geometria(fondo, occ, n_tubos=args.tubos, log=log)
+    linea = None
+    if args.correcciones:
+        linea = lib.linea_de_correcciones(args.correcciones, g, lut, fps, WH, log=log)
 
     ctrl = os.path.join(args.salida, nombre + '_control.jpg')
     lib.dibujar_geometria(ruta, lut, WH, g, ctrl)
     log('      control -> %s' % ctrl)
 
     log('  4/5 midiendo al animal')
-    filas = lib.extraer(ruta, lut, WH, fondo, g, fps, log=log)
+    if linea:
+        # La escala (largo del cuerpo) sale de la geometria AUTOMATICA aunque haya
+        # correcciones, para que los demas tubos y todo lo anterior no cambien.
+        auto = []
+        filas = lib.extraer(ruta, lut, WH, fondo, g, fps, log=log, linea=linea, largos_auto=auto)
+        escala = float(np.nanmedian(auto))
+    else:
+        filas = lib.extraer(ruta, lut, WH, fondo, g, fps, log=log)
     log('  5/5 agregando en bloques de 5 s')
-    bl = lib.bloques(filas, g, fps, log=log)
+    if linea:
+        bl = lib.bloques(filas, g, fps, escala=escala, log=log, linea=linea)
+    else:
+        bl = lib.bloques(filas, g, fps, log=log)
 
     # Las medidas de cada fotograma se guardan tal cual: con ellas se calculan
     # los segundos (segundos.py) o cualquier otra ventana sin volver a leer el
     # video, que es lo que cuesta diez minutos.
     cu = pd.DataFrame(filas)
-    cu['gx0'] = cu['s'].map(lambda s: g['tubos'][s][0])
-    cu['gx1'] = cu['s'].map(lambda s: g['tubos'][s][1])
-    cu['g_agua'], cu['g_fondo'] = g['y_agua'], g['y_fondo']
-    cu['escala'] = float(np.nanmedian(cu['largo']))     # la misma que usa bloques()
+    if linea:
+        # La geometria de un tubo corregido cambia en el tiempo: va fila por fila.
+        geos = [lib.geo_en(g, linea, s, t) for s, t in zip(cu['s'], cu['t'])]
+        cu['gx0'] = [x['x0'] for x in geos]
+        cu['gx1'] = [x['x1'] for x in geos]
+        cu['g_agua'] = [x['y_agua'] for x in geos]
+        cu['g_fondo'] = [x['y_fondo'] for x in geos]
+        cu['escala'] = escala
+    else:
+        cu['gx0'] = cu['s'].map(lambda s: g['tubos'][s][0])
+        cu['gx1'] = cu['s'].map(lambda s: g['tubos'][s][1])
+        cu['g_agua'], cu['g_fondo'] = g['y_agua'], g['y_fondo']
+        cu['escala'] = float(np.nanmedian(cu['largo']))     # la misma que usa bloques()
     cu.insert(0, 'paso', args.paso)
     dest_cu = os.path.join(args.salida, nombre + '_cuadros.csv')
     cu.round(4).to_csv(dest_cu, index=False, encoding='utf-8')
     log('      medidas por fotograma -> %s' % dest_cu)
 
-    bl = lib.cajas_crudas(bl, lut, g, fps, WH)
+    bl = lib.cajas_crudas(bl, lut, g, fps, WH, linea=linea)
     bl.insert(0, 'video', nombre)
     bl.insert(2, 'rotar', lib.ROT)
     # Queda anotado porque tres rasgos (path, rng, spanx) dependen de cada
@@ -208,8 +248,17 @@ def main():
     p.add_argument('--salida', default='etiquetas')
     p.add_argument('--rotar', default='0',
                    help='endereza un video grabado girado: derecha, izquierda o 180')
+    p.add_argument('--correccion', default=None, metavar='F.json',
+                   help='corrige el recuadro de uno o mas cilindros desde un instante: lista JSON de '
+                        '{"cilindro", "desde_segundo", "x0", "y0", "x1", "y1"} en coordenadas del video '
+                        'original tal como se ve. Sin ella todo sale igual que siempre')
     args = p.parse_args()
     os.makedirs(args.salida, exist_ok=True)
+    args.correcciones = None
+    if args.correccion:
+        if any(v.lower().endswith('.csv') for v in args.videos):
+            raise SystemExit('--correccion solo se usa con videos, no con _rasgos.csv ya sacados')
+        args.correcciones = lib.leer_correcciones(args.correccion)
 
     giros = {'0': 0, 'no': 0, 'derecha': 90, '90': 90, '180': 180,
              'izquierda': 270, '270': 270, '-90': 270}
