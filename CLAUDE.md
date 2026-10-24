@@ -370,3 +370,30 @@ Lo unico que el modelo entrenado le entrega al sistema completo son las
 conductas. Nada de confianza, probabilidades ni otras salidas. Es lo unico que
 debe salir del modelo. Lo interno (umbral, `p_*`, `confianza` en los CSV de
 trabajo) no forma parte del contrato con el sistema ni de su diagrama de clases.
+
+## `etiquetar.py --correccion` (2026-10-23, pausa del sistema web)
+
+Opción nueva y opcional: `--correccion archivo.json`, una lista de
+`{"cilindro", "desde_segundo", "x0", "y0", "x1", "y1"}` con el recuadro en
+coordenadas del video ORIGINAL tal como se ve (las de `bx0..by1` de
+`_rasgos.csv`). El sistema web la usa cuando una persona ajusta el recuadro de
+un cilindro en una pausa. Lo que hace (`lib.py`: `recuadro_a_marco`,
+`linea_de_correcciones`, `geo_en`, `girar`):
+
+- Pasa el recuadro al marco estabilizado con la matriz del fotograma más
+  cercano a `desde_segundo` (inverso de `cajas_crudas`; deshace `--rotar`).
+  Error de ida y vuelta ≤ 1 px.
+- Desde `desde_segundo`, SOLO ese cilindro se mide con la geometría nueva. La
+  escala del video (largo del cuerpo) sigue saliendo de la geometría automática.
+- Varias correcciones del mismo cilindro se aplican en orden de `desde_segundo`,
+  aunque el JSON venga desordenado (probado).
+- Sin `--correccion` la salida es idéntica a la de 9844e57 (`_cuadros.csv`,
+  `_rasgos.csv` y `_control.jpg`, comparados con hash en `Acu-baihui2.mp4`).
+
+Comportamiento conocido (medido en `Acu-baihui2.mp4`, cilindro 2, corrección
+igual al recuadro automático, desde 152.79 s): 385 filas del cilindro 2 cambian
+en `gx0`, `gx1`, `g_agua` y `g_fondo` por decimales de redondeo (≤ 1 px y
+< 0.2 %); `cx`/`cy` cambian en 100 filas (máx. 1.5 px y 3.1 px); `area`, `me`,
+`iou` y `dice` en unas 100–130 filas con cambios menores (máx. 1.4 % relativo);
+`above` cambia en 381 filas, con mediana de 0.066 relativo sobre las filas con
+base > 0. Los demás cilindros no cambian. Se acepta así.
