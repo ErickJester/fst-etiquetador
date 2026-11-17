@@ -51,8 +51,14 @@ fst_cnn.ENTRADA = 'fusion'
 #   0.2.0  figuras para la documentacion (datos, muestras, curva de
 #          entrenamiento en vivo, matriz de confusion, precision/recall/F1
 #          por conducta, lineas de tiempo, errores); la red no cambia
+#   0.3.0  opciones para probar mejoras SIN cambiar lo que hace por defecto:
+#          guardar las predicciones de cada corrida, suavizado en el tiempo,
+#          modelo de transiciones, apilar el contexto de los segundos vecinos,
+#          menos epocas / mas regularizacion / congelar capas, varias redes
+#          promediadas y volteo al predecir, entrenar sin los segundos de
+#          transicion, y una tabla que compara todas las corridas
 # 1.0.0 queda reservada para cuando este completamente probado y listo para produccion.
-VERSION_SEG = '0.2.0'
+VERSION_SEG = '0.3.0'
 print('fst_cnn_seg version %s cargada (red de fst_cnn version %s)' % (VERSION_SEG, fst_cnn.VERSION))
 
 
@@ -160,10 +166,111 @@ def medidas(X, d):
     return np.hstack([R, G])
 
 
-def validar(carpeta, partes=5, epocas=None, cada=1):
+class Volteada:
+    """Los mismos clips, volteados de izquierda a derecha (para predecir los
+    dos lados y promediar). No copia nada."""
+
+    def __init__(self, X):
+        self.X, self.shape = X, X.shape
+
+    def __len__(self):
+        return len(self.X)
+
+    def __getitem__(self, i):
+        return np.ascontiguousarray(np.asarray(self.X[i])[..., ::-1])
+
+
+def _semilla(n):
+    np.random.seed(n)
+    torch.manual_seed(n)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(n)
+
+
+def transiciones(d):
+    """True en los segundos de una rata donde tu etiqueta es distinta a la del
+    segundo anterior o a la del siguiente (los de la frontera entre conductas)."""
+    conducta = {(str(v), int(e), int(s)): c for v, e, s, c
+                in zip(d['video'], d['especimen'], d['segundo'], d['conducta'])}
+    out = np.zeros(len(d['segundo']), bool)
+    for i, (v, e, s, c) in enumerate(zip(d['video'], d['especimen'], d['segundo'], d['conducta'])):
+        for t in (int(s) - 1, int(s) + 1):
+            o = conducta.get((str(v), int(e), t))
+            if o is not None and o != c:
+                out[i] = True
+    return out
+
+
+def entrenar_ajustable(X, y, epocas=None, M=None, log=print, decay=None,
+                       suavizado_etiq=None, congelar=0):
+    """Igual que fst_cnn.entrenar, pero con tres cosas que se pueden mover:
+    decay (weight_decay de AdamW, 1e-4 por defecto), suavizado_etiq
+    (label_smoothing, 0.05 por defecto) y congelar (cuantas etapas de la CNN
+    preentrenada no se entrenan, de las primeras: stem, layer1, layer2, layer3)."""
+    from torch import nn
+    from torch.utils.data import DataLoader
+    aj = fst_cnn.AJUSTES[fst_cnn.ENTRADA]
+    epocas, lote, lr = epocas or aj['epocas'], aj['lote'], aj['lr']
+    decay = 1e-4 if decay is None else decay
+    suavizado_etiq = 0.05 if suavizado_etiq is None else suavizado_etiq
+    dev = fst_cnn.dispositivo()
+    m = fst_cnn.red(n_med=M.shape[1])
+    m.ajustar(M)
+    m = m.to(dev)
+    congeladas = ['stem', 'layer1', 'layer2', 'layer3'][:congelar]
+    for nombre in congeladas:
+        for p in getattr(m.cnn, nombre).parameters():
+            p.requires_grad = False
+    frec = np.bincount(y, minlength=len(CONDUCTAS)).astype(float)
+    peso = np.sqrt(frec.sum() / (len(CONDUCTAS) * np.maximum(frec, 1)))
+    peso = torch.tensor(peso / peso.mean(), dtype=torch.float32)
+    crit = nn.CrossEntropyLoss(weight=peso.to(dev), label_smoothing=suavizado_etiq)
+    grupos = [dict(params=[p for p in m.cnn.parameters() if p.requires_grad], lr=lr),
+              dict(params=list(m.med.parameters()) + list(m.cab.parameters()), lr=lr * 10)]
+    grupos = [g for g in grupos if g['params']]
+    maximos = [g['lr'] for g in grupos]
+    opt = torch.optim.AdamW(grupos, lr=lr, weight_decay=decay)
+    dl = DataLoader(fst_cnn.Clips(X, y, entrenar=True, M=M), batch_size=lote, shuffle=True,
+                    num_workers=2 if dev.type == 'cuda' else 0, drop_last=len(X) > lote)
+    sched = torch.optim.lr_scheduler.OneCycleLR(opt, maximos, total_steps=epocas * len(dl))
+    amp = dev.type == 'cuda'
+    scaler = torch.amp.GradScaler('cuda', enabled=amp)
+    for ep in range(epocas):
+        m.train()
+        for nombre in congeladas:                     # sin actualizar sus estadisticas
+            getattr(m.cnn, nombre).eval()
+        t, tot, n = time.time(), 0.0, 0
+        for xb, yb in dl:
+            yb = yb.to(dev)
+            opt.zero_grad()
+            with torch.autocast(dev.type, enabled=amp):
+                perd = crit(fst_cnn.adelante(m, xb, dev), yb)
+            scaler.scale(perd).backward()
+            scaler.step(opt)
+            scaler.update()
+            sched.step()
+            tot += perd.item() * len(yb)
+            n += len(yb)
+        log('    epoca %2d/%d  perdida %.3f  (%.0f s)' % (ep + 1, epocas, tot / n, time.time() - t))
+    return m
+
+
+def validar(carpeta, partes=5, epocas=None, cada=1, decay=None, suavizado_etiq=None,
+            congelar=0, semillas=1, tta=False, quitar_transiciones=False,
+            nombre=None, carpeta_corridas=None):
     """Validacion cruzada POR VIDEO. 'cada' = 2 entrena con uno de cada dos
     segundos (los vecinos se pisan un 75 %, se pierde poco y tarda la mitad);
-    la prueba siempre usa todos."""
+    la prueba siempre usa todos.
+
+    Con los argumentos por defecto hace exactamente lo de siempre. Las opciones
+    para probar mejoras (cada una por separado o juntas):
+      epocas, decay, suavizado_etiq, congelar   menos sobreajuste (ver entrenar_ajustable)
+      semillas=3      entrena 3 redes por parte y promedia sus probabilidades
+      tta=True        predice tambien el clip volteado y promedia
+      quitar_transiciones=True   no entrena con los segundos de frontera entre
+                      conductas (la prueba sigue usando todos)
+      nombre, carpeta_corridas   guarda las predicciones en carpeta_corridas/nombre.npz
+                      para compararlas despues con resumen_corridas()"""
     X, d, _ = cargar(carpeta)
     M = medidas(X, d)
     conducta, video = d['conducta'], d['video']
@@ -177,18 +284,39 @@ def validar(carpeta, partes=5, epocas=None, cada=1):
               'ver que el circuito funciona, no para la tesis.' % (nv, nv - 1))
     P = np.full((len(X), len(CONDUCTAS)), np.nan)
     gk = GroupKFold(n_splits=min(partes, nv))
+    por_defecto = decay is None and suavizado_etiq is None and not congelar
+    frontera = transiciones(d) if quitar_transiciones else np.zeros(len(X), bool)
     print('\nvalidando por video, en %d partes (%s)' % (gk.n_splits, fst_cnn.dispositivo()))
+    if not (por_defecto and semillas == 1 and not tta and not quitar_transiciones):
+        print('  opciones: epocas=%s decay=%s suavizado_etiq=%s congelar=%d semillas=%d tta=%s '
+              'quitar_transiciones=%s' % (epocas, decay, suavizado_etiq, congelar, semillas, tta,
+                                          quitar_transiciones))
     for k, (tr, te) in enumerate(gk.split(np.zeros(len(X)), y, video)):
-        tr = tr[tres[tr] & (d['segundo'][tr] % cada == 0)]
+        tr = tr[tres[tr] & (d['segundo'][tr] % cada == 0) & ~frontera[tr]]
         print('  parte %d: prueba con %s, entrena con %d segundos'
               % (k + 1, ', '.join(sorted(set(video[te]))), len(tr)))
-        _nueva('parte %d' % (k + 1))
-        m = fst_cnn.entrenar(X[tr], y[tr], epocas=epocas, M=M[tr], log=_log)
-        P[te] = fst_cnn.predecir(m, X[te], M=M[te])
-        del m
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        suma, pasadas = 0.0, 0
+        for s in range(semillas):
+            if semillas > 1:
+                _semilla(1000 * (k + 1) + s)
+            _nueva('parte %d' % (k + 1) if semillas == 1 else 'parte %d red %d' % (k + 1, s + 1))
+            if por_defecto:
+                m = fst_cnn.entrenar(X[tr], y[tr], epocas=epocas, M=M[tr], log=_log)
+            else:
+                m = entrenar_ajustable(X[tr], y[tr], epocas=epocas, M=M[tr], log=_log, decay=decay,
+                                       suavizado_etiq=suavizado_etiq, congelar=congelar)
+            suma = suma + fst_cnn.predecir(m, X[te], M=M[te])
+            pasadas += 1
+            if tta:
+                suma = suma + fst_cnn.predecir(m, Volteada(X[te]), M=M[te])
+                pasadas += 1
+            del m
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        P[te] = suma / pasadas
     informe(P, d)
+    if nombre and carpeta_corridas:
+        guardar_corrida(P, d, nombre, carpeta_corridas)
     print('\nsiguiente: fst_cnn_seg.figuras_resultados(P, d, X)')
     return P, d
 
@@ -249,15 +377,23 @@ def informe(P, d):
             print('  %.2f     %6d    %4.0f%%      %.3f' % (u, s.sum(), 100 * s.mean(), (yt[s] == pt[s]).mean()))
 
 
-def final(carpeta, destino, epocas=None, cada=1):
-    """Entrena con TODOS los segundos y guarda la red."""
+def final(carpeta, destino, epocas=None, cada=1, decay=None, suavizado_etiq=None, congelar=0,
+          quitar_transiciones=False):
+    """Entrena con TODOS los segundos y guarda la red. Las opciones son las de
+    validar: usa aqui las mismas que dieron mejor resultado."""
     X, d, (fps_clip, dur) = cargar(carpeta)
     M = medidas(X, d)
     tres = np.isin(d['conducta'], CONDUCTAS) & (d['segundo'] % cada == 0)
+    if quitar_transiciones:
+        tres &= ~transiciones(d)
     y = np.array([CONDUCTAS.index(c) for c in d['conducta'][tres]])
     print('\nentrenando la red final con %d segundos (%s)' % (tres.sum(), fst_cnn.dispositivo()))
     _nueva('final')
-    m = fst_cnn.entrenar(X[tres], y, epocas=epocas, M=M[tres], log=_log)
+    if decay is None and suavizado_etiq is None and not congelar:
+        m = fst_cnn.entrenar(X[tres], y, epocas=epocas, M=M[tres], log=_log)
+    else:
+        m = entrenar_ajustable(X[tres], y, epocas=epocas, M=M[tres], log=_log, decay=decay,
+                               suavizado_etiq=suavizado_etiq, congelar=congelar)
     torch.save(dict(pesos=m.state_dict(), conductas=CONDUCTAS, frames=X.shape[1],
                     medidas=fst_cnn.RASGOS + fst_cnn.REGLAS, alto=X.shape[2], ancho=X.shape[3],
                     videos=sorted(set(d['video'])), n_clips=int(tres.sum()),
@@ -265,6 +401,164 @@ def final(carpeta, destino, epocas=None, cada=1):
                     version_seg=VERSION_SEG, fps_clip=fps_clip, ventana=dur), destino)
     print('red -> %s' % destino)
     return HISTORIA
+
+
+# ---------------------------------------------------------------------------
+# PROBAR MEJORAS SIN VOLVER A ENTRENAR
+# Trabajan sobre P (las probabilidades de la validacion por video). Ninguna
+# toca la red: sirven para ver cuanto se gana con mirar los segundos vecinos.
+# ---------------------------------------------------------------------------
+def guardar_corrida(P, d, nombre, carpeta):
+    """Guarda las predicciones de una validacion para no perderlas al cerrar Colab."""
+    os.makedirs(carpeta, exist_ok=True)
+    ruta = os.path.join(carpeta, nombre + '.npz')
+    np.savez_compressed(ruta, P=P, video=d['video'], especimen=d['especimen'],
+                        segundo=d['segundo'], conducta=d['conducta'])
+    print('corrida guardada:', ruta)
+
+
+def cargar_corrida(ruta):
+    z = np.load(ruta, allow_pickle=True)
+    return z['P'], {k: z[k] for k in ('video', 'especimen', 'segundo', 'conducta')}
+
+
+def _hojas(d):
+    """Indices de cada rata, en orden de segundo."""
+    h = {}
+    for i, (v, e) in enumerate(zip(d['video'], d['especimen'])):
+        h.setdefault((str(v), int(e)), []).append(i)
+    return {k: np.array(sorted(ix, key=lambda i: d['segundo'][i])) for k, ix in h.items()}
+
+
+def suavizar(P, d, k=2):
+    """Promedia las probabilidades de cada segundo con las de los k segundos de
+    cada lado (de la misma rata). Quita los cambios sueltos de una conducta a
+    otra y de vuelta."""
+    out = np.zeros_like(P)
+    for ix in _hojas(d).values():
+        s = np.asarray(d['segundo'])[ix].astype(float)
+        cerca = (np.abs(s[:, None] - s[None, :]) <= k).astype(float)
+        out[ix] = (cerca @ P[ix]) / cerca.sum(1, keepdims=True)
+    return out
+
+
+def modelo_transiciones(P, d, permanencia=0.9):
+    """Probabilidad de cada conducta en cada segundo usando que una conducta
+    suele seguir: pasada hacia adelante y hacia atras de un modelo de
+    transiciones (cada segundo sigue igual con probabilidad 'permanencia').
+    Devuelve probabilidades, no solo la conducta."""
+    n = P.shape[1]
+    A = np.full((n, n), (1 - permanencia) / (n - 1))
+    np.fill_diagonal(A, permanencia)
+    prior = P.mean(0)
+    E = P / np.maximum(prior, 1e-6)                 # P como verosimilitud
+    out = np.zeros_like(P)
+    for ix in _hojas(d).values():
+        s = np.asarray(d['segundo'])[ix]
+        m = len(ix)
+        paso = [np.linalg.matrix_power(A, int(max(1, min(s[t] - s[t - 1], 20)))) for t in range(1, m)]
+        f = np.zeros((m, n))
+        f[0] = E[ix[0]] * prior
+        f[0] /= f[0].sum()
+        for t in range(1, m):
+            f[t] = E[ix[t]] * (f[t - 1] @ paso[t - 1])
+            f[t] /= f[t].sum()
+        b = np.ones((m, n))
+        for t in range(m - 2, -1, -1):
+            b[t] = paso[t] @ (E[ix[t + 1]] * b[t + 1])
+            b[t] /= b[t].sum()
+        g = f * b
+        out[ix] = g / g.sum(1, keepdims=True)
+    return out
+
+
+def apilar_contexto(P, d, k=5):
+    """Una regresion logistica pequena que decide cada segundo mirando las
+    probabilidades de los k segundos de cada lado. Se entrena y se prueba POR
+    VIDEO (con las P que la validacion ya dio para videos que la red no vio),
+    asi que la nota es honesta salvo un sesgo pequeno."""
+    from sklearn.linear_model import LogisticRegression
+    n = P.shape[1]
+    F = np.zeros((len(P), n * (2 * k + 1)))
+    for ix in _hojas(d).values():
+        pos = {int(d['segundo'][i]): i for i in ix}
+        for i in ix:
+            s = int(d['segundo'][i])
+            for j, o in enumerate(range(-k, k + 1)):
+                v = pos.get(s + o)
+                F[i, j * n:(j + 1) * n] = P[v] if v is not None else P[i]
+    tres = np.isin(d['conducta'], CONDUCTAS)
+    y = np.array([CONDUCTAS.index(c) if c in CONDUCTAS else -1 for c in d['conducta']])
+    video = np.asarray(d['video'])
+    out = np.full_like(P, np.nan)
+    gk = GroupKFold(n_splits=min(5, len(set(video))))
+    for tr, te in gk.split(F, y, video):
+        tr = tr[tres[tr]]
+        lr = LogisticRegression(C=1.0, max_iter=2000).fit(F[tr], y[tr])
+        out[te] = lr.predict_proba(F[te])
+    return out
+
+
+def _numeros(P, d, sin_frontera=False):
+    from sklearn.metrics import precision_recall_fscore_support as prfs
+    conducta = np.asarray(d['conducta'])
+    tres = np.isin(conducta, CONDUCTAS)
+    if sin_frontera:
+        tres = tres & ~transiciones(d)
+    y = np.array([CONDUCTAS.index(c) for c in conducta[tres]])
+    p = P.argmax(1)[tres]
+    f1 = prfs(y, p, labels=range(len(CONDUCTAS)), zero_division=0)[2]
+    ri = conducta == 'inmovilidad'
+    pi = P[:, CONDUCTAS.index('inmovilidad')] >= 0.5
+    f2 = prfs(ri, pi, labels=[True, False], zero_division=0)[2]
+    return dict(exactitud=(y == p).mean(), kappa=cohen_kappa_score(y, p),
+                F1_prom=f1.mean(), F1_escal=f1[0], F1_inmov=f1[1], F1_nado=f1[2],
+                F1_activa=f2[1], segundos=int(tres.sum()))
+
+
+def comparar_posproceso(P, d):
+    """Prueba de una vez el suavizado, el modelo de transiciones y el apilado de
+    contexto sobre P. Devuelve la tabla y un diccionario con las P de cada
+    variante (para usar la que mejor salga en figuras_resultados)."""
+    import pandas as pd
+    variantes = {'base': P}
+    for k in (1, 2, 3, 5):
+        variantes['suavizado +-%d s' % k] = suavizar(P, d, k)
+    for q in (0.8, 0.9, 0.95, 0.98):
+        variantes['transiciones %.2f' % q] = modelo_transiciones(P, d, q)
+    for k in (3, 5, 8):
+        variantes['contexto +-%d s' % k] = apilar_contexto(P, d, k)
+    filas = {nombre: _numeros(Q, d) for nombre, Q in variantes.items()}
+    tabla = pd.DataFrame(filas).T.drop(columns='segundos')
+    print(tabla.round(3).to_string())
+    mejor = tabla['exactitud'].idxmax()
+    print('\nmejor exactitud: %s (%.3f); la base es %.3f' % (mejor, tabla.loc[mejor, 'exactitud'],
+                                                            tabla.loc['base', 'exactitud']))
+    return tabla.round(3), variantes
+
+
+def exactitud_sin_transiciones(P, d):
+    """Cuanto del error esta justo en la frontera entre dos conductas, donde ni
+    tu etiqueta es segura."""
+    todo, sin = _numeros(P, d), _numeros(P, d, sin_frontera=True)
+    print('exactitud con todos los segundos : %.3f  (%d segundos)' % (todo['exactitud'], todo['segundos']))
+    print('exactitud sin los de frontera    : %.3f  (%d segundos)' % (sin['exactitud'], sin['segundos']))
+    print('segundos de frontera             : %.0f %%' % (100 * (1 - sin['segundos'] / todo['segundos'])))
+
+
+def resumen_corridas(carpeta):
+    """Tabla con todas las corridas guardadas: exactitud, kappa y F1."""
+    import pandas as pd
+    filas = {}
+    for f in sorted(glob.glob(os.path.join(carpeta, '*.npz'))):
+        P, d = cargar_corrida(f)
+        filas[os.path.splitext(os.path.basename(f))[0]] = _numeros(P, d)
+    if not filas:
+        print('no hay corridas en', carpeta)
+        return None
+    tabla = pd.DataFrame(filas).T.drop(columns='segundos').round(3)
+    print(tabla.sort_values('exactitud', ascending=False).to_string())
+    return tabla
 
 
 # ---------------------------------------------------------------------------
