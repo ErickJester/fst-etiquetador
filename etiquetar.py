@@ -10,6 +10,16 @@ un modelo nuevo sin reprocesar el video (segundos en vez de diez minutos):
 Opciones:
     --modelo M.joblib   clasificador entrenado; sin el, solo saca rasgos
     --tubos N           cuantos cilindros CON RATA hay (recomendado: ponlo siempre)
+    --geometria G       videos de UN solo cilindro grabado de cerca: la deteccion
+                        automatica esta pensada para varios tubos a distancia y
+                        ahi falla. G es "x0,x1,agua,fondo" (paredes del cilindro,
+                        superficie del agua y suelo del tubo, en las coordenadas
+                        de la imagen de control) o un .csv con columnas
+                        video,x0,x1,agua,fondo, una fila por video.
+    --aceptar-geometria si la revision de sentido comun rechaza un video (tubo
+                        absurdamente angosto, cuerpo mas grande que el tubo,
+                        animal sin verse en mas del 25% del video) y ya miraste
+                        la imagen de control y esta bien, sigue de todos modos
     --paso N            analizar 1 de cada N fotogramas. 12 por defecto: es el
                         que mejor resultado dio y con el que se entreno el modelo
     --umbral U          confianza minima para dar por buena la etiqueta (0.80)
@@ -102,6 +112,22 @@ def proponer(bl, paq, umbral, log=print):
     return bl
 
 
+def _revisar(problemas, args, log=print):
+    """Si la geometria o las medidas no tienen sentido, el video falla en vez de
+    escribir archivos que luego entrarian al entrenamiento. --aceptar-geometria
+    lo deja pasar (solo despues de mirar la imagen de control)."""
+    if not problemas:
+        return
+    for p in problemas:
+        log('  PROBLEMA: ' + p)
+    if args.aceptar_geometria:
+        log('  (se sigue por --aceptar-geometria)')
+        return
+    raise RuntimeError('la geometria o las medidas no tienen sentido: ' + '; '.join(problemas) +
+                       '. Mira el _control.jpg. Si es un solo cilindro, da la geometria con '
+                       '--geometria; si ya la miraste y esta bien, usa --aceptar-geometria')
+
+
 def una(ruta, args, paq, log=print):
     nombre = os.path.splitext(os.path.basename(ruta))[0]
     t0 = time.time()
@@ -124,17 +150,27 @@ def una(ruta, args, paq, log=print):
     lut, WH, fps = lib.registrar(ruta, paso=args.paso, log=log)
     log('  2/5 modelando el fondo')
     fondo, occ = lib.fondo_y_ocupacion(ruta, lut, WH, fps, log=log)
-    log('  3/5 buscando los tubos y la linea de agua')
-    g = lib.detectar_geometria(fondo, occ, n_tubos=args.tubos, log=log)
+    if args.geometria:
+        log('  3/5 usando la geometria dada a mano (un solo cilindro)')
+        g = lib.geometria_manual(args.geometria, nombre, WH, log=log)
+    else:
+        log('  3/5 buscando los tubos y la linea de agua')
+        g = lib.detectar_geometria(fondo, occ, n_tubos=args.tubos, log=log)
 
+    # La imagen de control se escribe ANTES de revisar: si la revision falla,
+    # es lo que hay que mirar para ver por que.
     ctrl = os.path.join(args.salida, nombre + '_control.jpg')
     lib.dibujar_geometria(ruta, lut, WH, g, ctrl)
     log('      control -> %s' % ctrl)
+    _revisar(lib.revisar_geometria(g, WH), args, log)
 
     log('  4/5 midiendo al animal')
     filas = lib.extraer(ruta, lut, WH, fondo, g, fps, log=log)
     log('  5/5 agregando en bloques de 5 s')
     bl = lib.bloques(filas, g, fps, log=log)
+    escala_med = float(np.nanmedian(pd.DataFrame(filas)['largo']))
+    _revisar(lib.revisar_geometria(g, WH, escala=escala_med,
+                                   ciegos=float((bl['n_visto'] < 5).mean())), args, log)
 
     # Las medidas de cada fotograma se guardan tal cual: con ellas se calculan
     # los segundos (segundos.py) o cualquier otra ventana sin volver a leer el
@@ -206,10 +242,17 @@ def main():
     p.add_argument('--paso', type=int, default=12)
     p.add_argument('--umbral', type=float, default=0.80)
     p.add_argument('--salida', default='etiquetas')
+    p.add_argument('--geometria', default=None,
+                   help='videos de UN solo cilindro: "x0,x1,agua,fondo" o un .csv con columnas '
+                        'video,x0,x1,agua,fondo (coordenadas de la imagen de control)')
+    p.add_argument('--aceptar-geometria', action='store_true',
+                   help='sigue aunque la revision de sentido comun ponga reparos')
     p.add_argument('--rotar', default='0',
                    help='endereza un video grabado girado: derecha, izquierda o 180')
     args = p.parse_args()
     os.makedirs(args.salida, exist_ok=True)
+    if args.geometria and args.tubos not in (None, 1):
+        raise SystemExit('--geometria es para un solo cilindro: usa --tubos=1 (o no pongas --tubos)')
 
     giros = {'0': 0, 'no': 0, 'derecha': 90, '90': 90, '180': 180,
              'izquierda': 270, '270': 270, '-90': 270}

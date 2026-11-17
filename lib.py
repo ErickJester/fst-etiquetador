@@ -14,6 +14,8 @@ Diferencias clave contra el pipeline de un solo video:
   3. El tiempo se normaliza por segundo, no por fotograma, porque los videos
      no vienen todos a la misma tasa.
 """
+import os
+
 import cv2
 import numpy as np
 
@@ -373,6 +375,93 @@ def detectar_geometria(fondo, occ, n_tubos=None, log=print):
     return g
 
 
+# ----------------- geometria a mano y revision de sentido comun -----------------
+
+# Limites sacados de los 15 videos que ya salieron bien (todos de 2 a 4 tubos a
+# distancia). No dependen de la distancia de la camara: son proporciones.
+GEO_ANCHO_MIN = 0.12      # ancho del tubo / ancho del encuadre (buenos: 0.15 a 0.27)
+GEO_COL_MIN = 0.14        # alto de la columna de agua / alto del encuadre (0.19 a 0.46)
+GEO_ESC_COL_MAX = 1.2     # largo del cuerpo / columna de agua (0.44 a 0.91)
+GEO_ESC_ANCHO = (0.2, 1.2)   # largo del cuerpo / ancho del tubo (0.36 a 0.74)
+GEO_CIEGOS_MAX = 0.25     # fraccion de bloques sin animal visible (buenos: 0)
+
+
+def geometria_manual(spec, nombre, WH, log=print):
+    """Geometria dada a mano para un video de UN solo cilindro.
+
+    'spec' es 'x0,x1,agua,fondo' o la ruta de un .csv con columnas
+    video,x0,x1,agua,fondo (se busca la fila de este video). Las coordenadas son
+    las de la imagen de control (_control.jpg): x0 y x1 son las paredes del
+    cilindro; agua, la superficie del agua; fondo, el suelo del tubo."""
+    import csv
+    W, H = WH
+    if spec.lower().endswith('.csv'):
+        fila = None
+        with open(spec, encoding='utf-8-sig', newline='') as f:
+            for r in csv.DictReader(f):
+                v = os.path.splitext(os.path.basename((r.get('video') or '').strip()))[0]
+                if v == nombre or (r.get('video') or '').strip() == nombre:
+                    fila = r
+        if fila is None:
+            raise RuntimeError('no hay una fila para "%s" en %s' % (nombre, spec))
+        vals = [fila[k] for k in ('x0', 'x1', 'agua', 'fondo')]
+    else:
+        vals = spec.split(',')
+    try:
+        x0, x1, ya, yf = [int(round(float(v))) for v in vals]
+    except (ValueError, TypeError):
+        raise RuntimeError('--geometria pide cuatro numeros: x0,x1,agua,fondo (recibi %r)' % (spec,))
+    if not (0 <= x0 < x1 <= W):
+        raise RuntimeError('geometria: x0=%d y x1=%d deben cumplir 0 <= x0 < x1 <= %d' % (x0, x1, W))
+    if not (0 < ya < yf < H):
+        raise RuntimeError('geometria: agua=%d y fondo=%d deben cumplir 0 < agua < fondo < %d' % (ya, yf, H))
+    col = yf - ya
+    g = dict(tubos={1: (x0, x1)}, y_agua=ya, y_fondo=yf,
+             roi_arriba=int(max(0, ya - 0.45 * col)),
+             roi_abajo=int(min(H - 1, yf + 0.05 * col)))
+    log('    geometria a mano: tubo 1:%d-%d' % (x0, x1))
+    log('    agua y=%d   fondo y=%d   zona medida %d-%d'
+        % (ya, yf, g['roi_arriba'], g['roi_abajo']))
+    return g
+
+
+def revisar_geometria(g, WH, escala=None, ciegos=None):
+    """Sentido comun sobre lo que se detecto. Devuelve la lista de problemas
+    (vacia si todo es razonable). Con 'escala' (largo del cuerpo en px) y
+    'ciegos' (fraccion de bloques sin animal) revisa tambien las medidas.
+
+    Existe porque una geometria imposible no hace fallar al programa: en videos
+    de un solo cilindro encontro un tubo de 25 px de ancho, midio un "cuerpo" de
+    45 px y escribio todos los archivos como si nada. Esos archivos, sin que
+    nadie mirara la imagen de control, habrian entrado al entrenamiento."""
+    W, H = WH
+    p = []
+    anchos = []
+    for k, (a, b) in g['tubos'].items():
+        anchos.append(b - a)
+        if (b - a) / W < GEO_ANCHO_MIN:
+            p.append('el tubo %d mide %d px de ancho (%.0f%% del encuadre; en los videos '
+                     'buenos es al menos el %.0f%%)' % (k, b - a, 100 * (b - a) / W,
+                                                       100 * GEO_ANCHO_MIN))
+    col = g['y_fondo'] - g['y_agua']
+    if col / H < GEO_COL_MIN:
+        p.append('la columna de agua mide %d px de alto (%.0f%% del encuadre; en los videos '
+                 'buenos es al menos el %.0f%%)' % (col, 100 * col / H, 100 * GEO_COL_MIN))
+    if escala is not None and anchos:
+        tipico = float(np.median(anchos))
+        if col > 0 and escala / col > GEO_ESC_COL_MAX:
+            p.append('el largo del cuerpo (%.0f px) es mayor que la columna de agua (%d px)'
+                     % (escala, col))
+        r = escala / tipico if tipico > 0 else np.inf
+        if not (GEO_ESC_ANCHO[0] <= r <= GEO_ESC_ANCHO[1]):
+            p.append('el largo del cuerpo (%.0f px) no cabe con el ancho del tubo (%.0f px)'
+                     % (escala, tipico))
+    if ciegos is not None and ciegos > GEO_CIEGOS_MAX:
+        p.append('no se vio al animal en el %.0f%% de los bloques (en los videos buenos, en '
+                 'ninguno o casi ninguno)' % (100 * ciegos))
+    return p
+
+
 def dibujar_geometria(ruta, lut, WH, g, destino):
     """Imagen de control. Mirala 5 segundos por video: si las lineas no caen
     sobre el agua y el suelo, la deteccion fallo y no sirve seguir."""
@@ -608,7 +697,8 @@ def bloques(filas, g, fps, escala=None, log=print):
     if escala is None:
         escala = float(np.nanmedian(df['largo']))
     if not (escala > 5):
-        raise RuntimeError('no se pudo medir el largo del cuerpo')
+        raise RuntimeError('no se pudo medir el largo del cuerpo (lo mas probable: los tubos '
+                           'estan mal detectados; mira la imagen de control)')
     ya, yf = g['y_agua'], g['y_fondo']
 
     df['bloque'] = (df['t'] // BLOCK_S).astype(int) + 1
